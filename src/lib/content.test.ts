@@ -1,0 +1,146 @@
+import { describe, expect, it } from 'vitest';
+import { COURSES, getCourse, isUnlocked, lessonsOf } from '../data/courses';
+import { checkText, expandAll, normalize, primary, toTiles } from './answer';
+import { checkExercise } from './check';
+import { generateLesson, generatePractice } from './generate';
+
+describe('courses', () => {
+  it('offers Spanish, French and Hindi', () => {
+    expect(COURSES.map((c) => c.id)).toEqual(['es', 'fr', 'hi']);
+  });
+
+  it('has unique, course-prefixed lesson ids', () => {
+    const ids = COURSES.flatMap((c) => lessonsOf(c).map((l) => l.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const c of COURSES) for (const l of lessonsOf(c)) expect(l.id.startsWith(`${c.id}-`)).toBe(true);
+  });
+
+  for (const course of COURSES) {
+    describe(course.name, () => {
+      it('has no duplicate words or meanings within a unit (keeps choices unambiguous)', () => {
+        for (const unit of course.units) {
+          const words = unit.lessons.flatMap((l) => l.words);
+          expect(new Set(words.map((w) => w.t)).size, unit.id).toBe(words.length);
+          expect(new Set(words.map((w) => w.en)).size, unit.id).toBe(words.length);
+        }
+      });
+
+      it('every sentence pattern expands', () => {
+        for (const l of lessonsOf(course))
+          for (const s of l.sentences) {
+            expect(expandAll(s.t).length).toBeGreaterThan(0);
+            expect(expandAll(s.en).length).toBeGreaterThan(0);
+          }
+      });
+
+      it('unlocks lessons in order', () => {
+        const [a, b] = lessonsOf(course);
+        expect(isUnlocked(course, a.id, {})).toBe(true);
+        expect(isUnlocked(course, b.id, {})).toBe(false);
+        expect(isUnlocked(course, b.id, { [a.id]: {} })).toBe(true);
+      });
+
+      for (const speech of [true, false]) {
+        it(`every generated exercise is solvable (speech=${speech})`, () => {
+          for (let round = 0; round < 5; round++) {
+            for (const lesson of lessonsOf(course)) {
+              const exercises = [
+                ...generateLesson(course, lesson, { speech }),
+                ...generatePractice(course, [lesson], { speech }),
+              ];
+              expect(new Set(exercises.map((e) => e.key)).size).toBe(exercises.length);
+              for (const ex of exercises) {
+                if (ex.kind === 'choice') {
+                  expect(ex.options).toHaveLength(4);
+                  expect(new Set(ex.options.map((o) => o.label)).size).toBe(4);
+                  expect(ex.options.some((o) => o.label === ex.answer)).toBe(true);
+                  expect(checkExercise(ex, ex.answer).correct).toBe(true);
+                }
+                if (ex.kind === 'tiles') {
+                  const needed = toTiles(ex.accepted[0]);
+                  const bank = [...ex.tiles];
+                  for (const t of needed) {
+                    const i = bank.indexOf(t);
+                    expect(i, `${lesson.id}: tile "${t}" missing`).toBeGreaterThanOrEqual(0);
+                    bank.splice(i, 1);
+                  }
+                  expect(checkExercise(ex, needed.join(' ')).correct).toBe(true);
+                  const answerWords = new Set(needed.map((t) => normalize(t)));
+                  expect(bank.every((t) => !answerWords.has(normalize(t)))).toBe(true);
+                }
+                if (ex.kind === 'type') {
+                  expect(checkText(ex.accepted[0], ex.accepted, { typos: true }).correct).toBe(true);
+                  if (!course.typeInTarget) expect(ex.answerSide).toBe('en');
+                }
+                if (ex.kind === 'match') expect(ex.pairs.length).toBeGreaterThanOrEqual(4);
+                if (!speech) expect('audio' in ex && ex.audio).toBeFalsy();
+              }
+            }
+          }
+        });
+      }
+    });
+  }
+});
+
+describe('Hindi', () => {
+  const hindi = getCourse('hi');
+  const glossary = hindi.glossary!;
+
+  it('starts with the script unit', () => {
+    expect(hindi.units[0].lessons.every((l) => l.kind === 'script')).toBe(true);
+  });
+
+  it('romanizes every word and every word shown in a sentence', () => {
+    const missing = new Set<string>();
+    for (const l of lessonsOf(hindi)) {
+      if (l.kind !== 'script') for (const w of l.words) if (!glossary[w.t]) missing.add(w.t);
+      for (const s of l.sentences)
+        for (const variant of expandAll(s.t)) for (const tok of toTiles(variant)) if (!glossary[tok]) missing.add(tok);
+    }
+    expect([...missing]).toEqual([]);
+  });
+
+  it('shows romanization on prompts and tiles, but never gives away script answers', () => {
+    for (const lesson of lessonsOf(hindi)) {
+      for (const ex of generateLesson(hindi, lesson, { speech: true })) {
+        if (lesson.kind === 'script') {
+          if (ex.kind === 'choice') expect(ex.options.every((o) => !o.roman)).toBe(true);
+          if (ex.kind === 'match') expect(ex.pairs.every((p) => !p.roman)).toBe(true);
+          continue;
+        }
+        if (ex.kind === 'tiles' && ex.answerSide === 't') {
+          for (const t of ex.tiles) expect(ex.roman?.[t], t).toBeTruthy();
+          expect(checkExercise(ex, 'wrong').answerRoman).toBeTruthy();
+        }
+        if ((ex.kind === 'tiles' || ex.kind === 'type') && ex.promptSide === 't') {
+          expect(ex.promptRoman).toBeTruthy();
+        }
+        if (ex.kind === 'choice' && ex.optionSide === 't') expect(ex.options.every((o) => o.roman)).toBe(true);
+      }
+    }
+  });
+
+  it('handles the danda and accepts either gendered verb form', () => {
+    const s = lessonsOf(hindi)
+      .flatMap((l) => l.sentences)
+      .find((x) => primary(x.t) === 'मैं रोटी खाता हूँ।')!;
+    const accepted = expandAll(s.t);
+    expect(checkText('मैं रोटी खाती हूँ', accepted, { typos: false }).correct).toBe(true);
+  });
+});
+
+describe('French', () => {
+  it("accepts 'oe' for 'œ' and keeps elisions as single tiles", () => {
+    expect(checkText('je mange un oeuf', ['Je mange un œuf.'], { typos: true }).correct).toBe(true);
+    expect(toTiles("Je voudrais un thé, s'il vous plaît.")).toEqual([
+      'je',
+      'voudrais',
+      'un',
+      'thé',
+      "s'il",
+      'vous',
+      'plaît',
+    ]);
+  });
+});
