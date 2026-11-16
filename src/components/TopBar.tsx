@@ -10,9 +10,23 @@ type Props = {
   now: number;
   onSwitchCourse: () => void;
   onToggleSound: () => void;
+  onAccount: () => void;
+  accountLabel: string;
+  syncError: string | null;
 };
 
-export function TopBar({ course, progress, streak, practicedToday, now, onSwitchCourse, onToggleSound }: Props) {
+export function TopBar({
+  course,
+  progress,
+  streak,
+  practicedToday,
+  now,
+  onSwitchCourse,
+  onToggleSound,
+  onAccount,
+  accountLabel,
+  syncError,
+}: Props) {
   const next = msUntilNextHeart(progress, now);
   const heartTitle =
     progress.hearts >= MAX_HEARTS ? 'Hearts are full' : `Next heart in ${formatDuration(next ?? 0)}`;
@@ -44,6 +58,15 @@ export function TopBar({ course, progress, streak, practicedToday, now, onSwitch
           title={progress.sound ? 'Sound on' : 'Sound off'}
         >
           {progress.sound ? '🔊' : '🔇'}
+        </button>
+        <button
+          type="button"
+          className={`account-btn ${syncError ? 'has-sync-error' : ''}`}
+          onClick={onAccount}
+          aria-label={syncError ? `Account, sync issue: ${syncError}` : accountLabel}
+          title={syncError ?? accountLabel}
+        >
+          {syncError ? '⚠' : accountLabel}
         </button>
       </div>
     </header>

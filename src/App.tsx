@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { AccountPanel } from './components/AccountPanel';
 import { Complete } from './components/Complete';
 import { CoursePicker } from './components/CoursePicker';
 import { Home } from './components/Home';
@@ -21,6 +23,7 @@ import {
   todayXp,
   xpFor,
 } from './lib/progress';
+import { errorMessage, loadCloudProgress, saveCloudProgress, supabase } from './lib/supabase';
 import { hasVoice } from './lib/speech';
 import type { Exercise, SessionResult } from './types';
 
@@ -43,9 +46,83 @@ export default function App() {
   const [progress, setProgress] = useState(() => loadProgress(Date.now()));
   const [now, setNow] = useState(Date.now());
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(!supabase);
+  const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [retrySync, setRetrySync] = useState(0);
+  const [showAccount, setShowAccount] = useState(false);
+  const progressRef = useRef(progress);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const course = getCourse(progress.course);
 
-  useEffect(() => saveProgress(progress), [progress]);
+  useEffect(() => {
+    progressRef.current = progress;
+  }, [progress]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return;
+      setSession(nextSession);
+      setAuthReady(true);
+      setSyncError(null);
+    });
+    void supabase.auth.getSession().then(({ data: sessionData, error }) => {
+      if (!active) return;
+      if (error) setSyncError(error.message);
+      setSession(sessionData.session);
+      setAuthReady(true);
+    }).catch((error: unknown) => {
+      if (!active) return;
+      setSyncError(errorMessage(error));
+      setAuthReady(true);
+    });
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authReady || !session) {
+      setHydratedUserId(null);
+      return;
+    }
+    let active = true;
+    const userId = session.user.id;
+    setHydratedUserId(null);
+    setSyncError(null);
+    void (async () => {
+      try {
+        const cloudProgress = await loadCloudProgress(userId);
+        if (!active) return;
+        if (cloudProgress) {
+          setProgress(cloudProgress);
+        } else {
+          await saveCloudProgress(userId, progressRef.current);
+        }
+        if (active) setHydratedUserId(userId);
+      } catch (error) {
+        if (active) setSyncError(`Could not load cloud progress: ${errorMessage(error)}`);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [authReady, session?.user.id, retrySync]);
+
+  useEffect(() => {
+    saveProgress(progress);
+    if (!session || hydratedUserId !== session.user.id) return;
+    const userId = session.user.id;
+    saveQueue.current = saveQueue.current
+      .catch(() => undefined)
+      .then(() => saveCloudProgress(userId, progress))
+      .then(() => setSyncError(null))
+      .catch((error: unknown) => setSyncError(`Could not sync progress: ${errorMessage(error)}`));
+  }, [progress, session?.user.id, hydratedUserId]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -114,9 +191,17 @@ export default function App() {
 
   const streak = currentStreak(progress, now);
 
+  if (!authReady) {
+    return <main className="account-loading" role="status">Loading account…</main>;
+  }
+
   if (progress.course === null || screen.name === 'courses') {
     return (
       <div className="app">
+        <button type="button" className="account-picker-btn" onClick={() => setShowAccount(true)}>
+          {session ? 'Account' : 'Sign in'}
+          {syncError && <span aria-label="Sync issue"> ⚠</span>}
+        </button>
         <CoursePicker
           progress={progress}
           onPick={(id) => {
@@ -125,6 +210,14 @@ export default function App() {
           }}
           onBack={progress.course === null ? undefined : () => setScreen({ name: 'home' })}
         />
+        {showAccount && (
+          <AccountPanel
+            session={session}
+            syncError={syncError}
+            onClose={() => setShowAccount(false)}
+            onRetrySync={() => setRetrySync((retry) => retry + 1)}
+          />
+        )}
       </div>
     );
   }
@@ -141,6 +234,9 @@ export default function App() {
             now={now}
             onSwitchCourse={() => setScreen({ name: 'courses' })}
             onToggleSound={() => setProgress((p) => ({ ...p, sound: !p.sound }))}
+            onAccount={() => setShowAccount(true)}
+            accountLabel={session ? 'Account' : 'Sign in'}
+            syncError={syncError}
           />
           <Home
             course={course}
@@ -187,6 +283,14 @@ export default function App() {
           msUntilNext={msUntilNextHeart(progress, now)}
           onPractice={startPractice}
           onHome={() => setScreen({ name: 'home' })}
+        />
+      )}
+      {showAccount && (
+        <AccountPanel
+          session={session}
+          syncError={syncError}
+          onClose={() => setShowAccount(false)}
+          onRetrySync={() => setRetrySync((retry) => retry + 1)}
         />
       )}
     </div>
