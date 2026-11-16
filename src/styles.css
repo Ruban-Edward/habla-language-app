@@ -149,6 +149,7 @@ h1, h2 { line-height: 1.2; margin: 0; }
 }
 .account-error { color: var(--bad) !important; font-size: 14px; overflow-wrap: anywhere; }
 .account-note { font-size: 14px; overflow-wrap: anywhere; }
+.account-divider { font-size: 13px; }
 .stat {
   display: inline-flex;
   align-items: center;

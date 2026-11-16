@@ -49,6 +49,22 @@ export function AccountPanel({ session, syncError, onClose, onRetrySync }: Props
     }
   };
 
+  const signInWithGoogle = async () => {
+    if (!supabase) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+      if (authError) throw authError;
+    } catch (authError) {
+      setError(errorMessage(authError));
+      setBusy(false);
+    }
+  };
+
   const signOut = async () => {
     if (!supabase) return;
     setBusy(true);
@@ -90,6 +106,10 @@ export function AccountPanel({ session, syncError, onClose, onRetrySync }: Props
       ) : (
         <>
           <p>{isSignUp ? 'Create an account to sync progress across devices.' : 'Sign in to load your cloud progress.'}</p>
+          <button type="button" className="btn ghost wide" onClick={signInWithGoogle} disabled={busy}>
+            {busy ? 'Please wait…' : 'Continue with Google'}
+          </button>
+          <p className="account-divider">or continue with email</p>
           <form className="account-form" onSubmit={submit}>
             <label>
               Email
