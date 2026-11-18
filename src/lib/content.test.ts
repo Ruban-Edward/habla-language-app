@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { COURSES, getCourse, isUnlocked, lessonsOf } from '../data/courses';
+import {
+  COURSES,
+  getCourse,
+  isLevelComplete,
+  isLevelUnlocked,
+  isUnlocked,
+  lessonsOf,
+  unitsInLevel,
+} from '../data/courses';
 import { checkText, expandAll, normalize, primary, toTiles } from './answer';
 import { checkExercise } from './check';
 import { generateLesson, generatePractice } from './generate';
@@ -64,7 +72,7 @@ describe('courses', () => {
                     expect(i, `${lesson.id}: tile "${t}" missing`).toBeGreaterThanOrEqual(0);
                     bank.splice(i, 1);
                   }
-                  expect(checkExercise(ex, needed.join(' ')).correct).toBe(true);
+                  expect(checkExercise(ex, needed.join(' ')).correct, `${lesson.id}: ${ex.accepted[0]}`).toBe(true);
                   const answerWords = new Set(needed.map((t) => normalize(t)));
                   expect(bank.every((t) => !answerWords.has(normalize(t)))).toBe(true);
                 }
@@ -131,6 +139,25 @@ describe('Hindi', () => {
 });
 
 describe('French', () => {
+  const french = getCourse('fr');
+
+  it('unlocks intermediate after beginner and advanced after intermediate', () => {
+    const completedFor = (level: 'beginner' | 'intermediate') =>
+      Object.fromEntries(unitsInLevel(french, level).flatMap((unit) => unit.lessons.map((lesson) => [lesson.id, {}])));
+    const beginnerDone = completedFor('beginner');
+    const intermediateDone = completedFor('intermediate');
+    const firstIntermediate = unitsInLevel(french, 'intermediate')[0].lessons[0];
+    const firstAdvanced = unitsInLevel(french, 'advanced')[0].lessons[0];
+
+    expect(isLevelUnlocked(french, 'intermediate', {})).toBe(false);
+    expect(isLevelUnlocked(french, 'advanced', {})).toBe(false);
+    expect(isLevelComplete(french, 'beginner', beginnerDone)).toBe(true);
+    expect(isUnlocked(french, firstIntermediate.id, beginnerDone)).toBe(true);
+    expect(isLevelUnlocked(french, 'advanced', beginnerDone)).toBe(false);
+    expect(isUnlocked(french, firstAdvanced.id, beginnerDone)).toBe(false);
+    expect(isLevelUnlocked(french, 'advanced', { ...beginnerDone, ...intermediateDone })).toBe(true);
+  });
+
   it("accepts 'oe' for 'œ' and keeps elisions as single tiles", () => {
     expect(checkText('je mange un oeuf', ['Je mange un œuf.'], { typos: true }).correct).toBe(true);
     expect(toTiles("Je voudrais un thé, s'il vous plaît.")).toEqual([

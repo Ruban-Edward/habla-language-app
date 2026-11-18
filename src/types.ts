@@ -4,6 +4,7 @@ export type Pattern = string | string[];
 /** `t` is always the language being learned; `en` is English. */
 export type Word = { t: string; en: string; emoji?: string };
 export type Sentence = { t: Pattern; en: Pattern };
+export type LearningLevel = 'beginner' | 'intermediate' | 'advanced';
 export type Lesson = {
   id: string;
   title: string;
@@ -12,7 +13,14 @@ export type Lesson = {
   words: Word[];
   sentences: Sentence[];
 };
-export type Unit = { id: string; title: string; description: string; color: string; lessons: Lesson[] };
+export type Unit = {
+  id: string;
+  title: string;
+  description: string;
+  color: string;
+  level?: LearningLevel;
+  lessons: Lesson[];
+};
 
 export type Course = {
   id: string;

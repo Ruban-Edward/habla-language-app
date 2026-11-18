@@ -1,5 +1,13 @@
 # habla-language-app
 
+The interface supports light and dark themes from the header (also available while choosing a course). Your selection is saved in this browser.
+
+French pronunciation is generated locally in the browser with the Piper SIWIS voice; lesson text is not sent to a speech service. The first playback downloads about 63 MB of voice data from Hugging Face and loads the speech runtime, then stores the model in browser storage when available so later playback can work offline.
+
+French voice attribution: [fr_FR-siwis-medium](https://huggingface.co/Trelis/piper-fr-fr-siwis-medium), trained on the [SIWIS French Speech Synthesis Database](https://datashare.is.ed.ac.uk/handle/10283/2353), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+The French path is organized into Beginner (A1), Intermediate (A2–B1), and Advanced (B2). Finish every lesson in a stage to unlock the next one.
+
 ## Optional account and cloud progress setup
 
 Progress is stored in this browser by default. To enable accounts and sync progress across devices:

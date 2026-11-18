@@ -42,8 +42,17 @@ type Screen =
     }
   | { name: 'nohearts' };
 
+type Theme = 'light' | 'dark';
+
 export default function App() {
   const [progress, setProgress] = useState(() => loadProgress(Date.now()));
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      return window.localStorage.getItem('habla-theme') === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
   const [now, setNow] = useState(Date.now());
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [session, setSession] = useState<Session | null>(null);
@@ -141,6 +150,19 @@ export default function App() {
     document.documentElement.style.setProperty('--course', course.color);
   }, [course.color]);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute(
+      'content',
+      theme === 'dark' ? '#1A1B1F' : '#F0E7D5',
+    );
+    try {
+      window.localStorage.setItem('habla-theme', theme);
+    } catch {
+      // Theme selection still works for the current visit when storage is unavailable.
+    }
+  }, [theme]);
+
   // Listening exercises only when sound is on and the browser can speak this language.
   const genOpts = () => ({ speech: progress.sound && hasVoice(course.lang) });
 
@@ -198,10 +220,21 @@ export default function App() {
   if (progress.course === null || screen.name === 'courses') {
     return (
       <div className="app">
-        <button type="button" className="account-picker-btn" onClick={() => setShowAccount(true)}>
-          {session ? 'Account' : 'Sign in'}
-          {syncError && <span aria-label="Sync issue"> ⚠</span>}
-        </button>
+        <div className="picker-top-actions">
+          <button
+            type="button"
+            className="icon-btn theme-toggle"
+            onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
+            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+          >
+            {theme === 'light' ? '☾' : '☀'}
+          </button>
+          <button type="button" className="account-picker-btn" onClick={() => setShowAccount(true)}>
+            {session ? 'Account' : 'Sign in'}
+            {syncError && <span aria-label="Sync issue"> ⚠</span>}
+          </button>
+        </div>
         <CoursePicker
           progress={progress}
           onPick={(id) => {
@@ -237,6 +270,8 @@ export default function App() {
             onAccount={() => setShowAccount(true)}
             accountLabel={session ? 'Account' : 'Sign in'}
             syncError={syncError}
+            theme={theme}
+            onToggleTheme={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
           />
           <Home
             course={course}
