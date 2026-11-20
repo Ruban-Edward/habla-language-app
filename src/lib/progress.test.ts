@@ -2,14 +2,21 @@ import { describe, expect, it } from 'vitest';
 import {
   HEART_REFILL_MS,
   MAX_HEARTS,
+  RECALL_GAP_MS,
+  REVIEW_RETRY_MS,
   currentStreak,
+  dueWordIds,
   gainHeart,
   initialProgress,
   loseHeart,
   migrate,
   msUntilNextHeart,
+  recordMission,
+  recordWordReview,
   recordSession,
   regenHearts,
+  removeSavedPhrase,
+  toggleSavedPhrase,
   xpFor,
 } from './progress';
 
@@ -68,6 +75,57 @@ describe('xp', () => {
     expect(xpFor({ practice: false, mistakes: 0 })).toBe(15);
     expect(xpFor({ practice: false, mistakes: 2 })).toBe(10);
     expect(xpFor({ practice: true, mistakes: 0 })).toBe(5);
+  });
+});
+
+describe('vocabulary review', () => {
+  it('schedules misses soon and spaces consecutive correct recalls', () => {
+    const now = day(1);
+    let p = recordWordReview(initialProgress(now), 'es', ['hola', 'gracias'], false, now);
+    expect(dueWordIds(p, 'es', now + REVIEW_RETRY_MS - 1)).toEqual([]);
+    expect(dueWordIds(p, 'fr', now + REVIEW_RETRY_MS)).toEqual([]);
+    expect(dueWordIds(p, 'es', now + REVIEW_RETRY_MS)).toEqual(['hola', 'gracias']);
+
+    p = recordWordReview(p, 'es', ['hola'], true, now + REVIEW_RETRY_MS);
+    expect(p.wordReviews['es:hola']).toMatchObject({ intervalDays: 1, repetitions: 1 });
+    const nextReview = p.wordReviews['es:hola'].dueAt;
+    p = recordWordReview(p, 'es', ['hola'], true, nextReview);
+    expect(p.wordReviews['es:hola']).toMatchObject({ intervalDays: 3, repetitions: 2 });
+  });
+});
+
+describe('week-later recall', () => {
+  it('counts only answers given a week or more after the word was last seen', () => {
+    const start = day(1);
+    let p = recordWordReview(initialProgress(start), 'es', ['hola', 'gracias'], true, start);
+    expect(p.recall).toEqual({});
+    p = recordWordReview(p, 'es', ['hola'], true, start + RECALL_GAP_MS - 1);
+    expect(p.recall).toEqual({});
+    p = recordWordReview(p, 'es', ['gracias'], false, start + RECALL_GAP_MS);
+    expect(p.recall.es).toEqual({ attempts: 1, correct: 0 });
+    p = recordWordReview(p, 'es', ['hola'], true, start + 3 * RECALL_GAP_MS);
+    expect(p.recall.es).toEqual({ attempts: 2, correct: 1 });
+    expect(p.recall.fr).toBeUndefined();
+  });
+});
+
+describe('missions', () => {
+  it('records attempts and best accuracy, and earns lesson-sized XP', () => {
+    let p = recordMission(initialProgress(0), 'es-cafe', 80);
+    p = recordMission(p, 'es-cafe', 60);
+    expect(p.missions['es-cafe']).toEqual({ times: 2, bestAccuracy: 80 });
+    expect(xpFor({ practice: true, mistakes: 0, missionId: 'es-cafe' })).toBe(15);
+    expect(xpFor({ practice: true, mistakes: 2, missionId: 'es-cafe' })).toBe(10);
+  });
+});
+
+describe('phrasebook', () => {
+  it('saves and removes a course-specific word or phrase', () => {
+    const phrase = { courseId: 'es', target: 'hola', meaning: 'hello' };
+    const saved = toggleSavedPhrase(initialProgress(0), phrase, day(1));
+    expect(saved.savedPhrases).toEqual([{ ...phrase, id: 'es:hola', createdAt: day(1) }]);
+    expect(toggleSavedPhrase(saved, phrase, day(2)).savedPhrases).toEqual([]);
+    expect(removeSavedPhrase(saved, 'es:hola').savedPhrases).toEqual([]);
   });
 });
 

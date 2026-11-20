@@ -159,10 +159,10 @@ export function SpeakerIcon({ size = 22 }: { size?: number }) {
   );
 }
 
-export function Modal({ children, onClose }: { children: ReactNode; onClose?: () => void }) {
+export function Modal({ children, onClose, className = '' }: { children: ReactNode; onClose?: () => void; className?: string }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal card ${className}`} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>

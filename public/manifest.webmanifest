@@ -1,0 +1,17 @@
+{
+  "name": "Habla — language companion",
+  "short_name": "Habla",
+  "description": "Learn Spanish, French and Hindi with spaced review, real-life missions and a personal phrasebook.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f0e7d5",
+  "theme_color": "#f0e7d5",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

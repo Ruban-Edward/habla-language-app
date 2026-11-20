@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import {
   isLevelComplete,
   isLevelUnlocked,
@@ -9,20 +9,62 @@ import {
   unitsInLevel,
 } from '../data/courses';
 import type { Progress } from '../lib/progress';
-import type { Course } from '../types';
+import type { Course, LearningReason } from '../types';
+import { DAILY_PACES, GoalSetup } from './GoalSetup';
+import { MissionsSection } from './MissionsSection';
+import { OfflineCard } from './OfflinePanel';
+import { Phrasebook } from './Phrasebook';
+import { RomanToggle } from './RomanToggle';
 import { GoalRing, SpeakButton } from './ui';
+import { UsageNotes } from './UsageNotes';
+
+const GOAL_SKIPPED_KEY = 'habla-goal-skipped';
+
+function goalSkipped(): boolean {
+  try {
+    return window.localStorage.getItem(GOAL_SKIPPED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 type Props = {
   course: Course;
   progress: Progress;
   todayXp: number;
+  dueReviewCount: number;
   streak: number;
   onStart: (lessonId: string) => void;
   onPractice: () => void;
+  onStartReview: () => void;
+  onStartMission: (missionId: string) => void;
+  onSetDailyGoal: (goal: number) => void;
+  onSetGoal: (reason: LearningReason, dailyGoal: number) => void;
+  onToggleRoman: () => void;
+  onRemovePhrase: (id: string) => void;
   onReset: () => void;
 };
 
-export function Home({ course, progress, todayXp, streak, onStart, onPractice, onReset }: Props) {
+export function Home({
+  course,
+  progress,
+  todayXp,
+  dueReviewCount,
+  streak,
+  onStart,
+  onPractice,
+  onStartReview,
+  onStartMission,
+  onSetDailyGoal,
+  onSetGoal,
+  onToggleRoman,
+  onRemovePhrase,
+  onReset,
+}: Props) {
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [skipped, setSkipped] = useState(goalSkipped);
+  const showGoalSetup = editingGoal || (progress.learningReason === null && !skipped);
+  const recall = progress.recall[course.id];
   const lessons = lessonsOf(course);
   const done = lessons.filter((l) => l.id in progress.completed).length;
   const nextLesson = lessons.find((l) => !(l.id in progress.completed));
@@ -54,11 +96,33 @@ export function Home({ course, progress, todayXp, streak, onStart, onPractice, o
           <h1>{headline}</h1>
           <p className="home-subtitle">A thoughtful path from your first {greeting.toLowerCase()} to speaking with confidence.</p>
         </div>
-        <span className="level-chip"><span>{course.badge}</span> {`${LEVEL_INFO[currentLevel].cefr} · ${LEVEL_INFO[currentLevel].title.toUpperCase()}${allLevelsComplete ? ' COMPLETE' : ''}`}</span>
+        <span className="level-chip"><span>{course.badge}</span> {`${LEVEL_INFO[currentLevel].title.toUpperCase()} PATH${allLevelsComplete ? ' COMPLETE' : ''}`}</span>
       </div>
 
       <div className="home-grid">
         <div className="home-main">
+          {showGoalSetup && (
+            <GoalSetup
+              course={course}
+              reason={progress.learningReason}
+              dailyGoal={progress.dailyGoal}
+              onSave={(reason, goal) => {
+                onSetGoal(reason, goal);
+                setEditingGoal(false);
+              }}
+              onCancel={() => {
+                if (!editingGoal) {
+                  setSkipped(true);
+                  try {
+                    window.localStorage.setItem(GOAL_SKIPPED_KEY, '1');
+                  } catch {
+                    // The prompt simply returns next visit when storage is unavailable.
+                  }
+                }
+                setEditingGoal(false);
+              }}
+            />
+          )}
           <section className="hero card">
             <div className="hero-copy">
               <span className="hero-kicker">YOUR NEXT STEP</span>
@@ -78,6 +142,8 @@ export function Home({ course, progress, todayXp, streak, onStart, onPractice, o
               <span className="hero-art-note">the beginning<br />of something</span>
             </div>
           </section>
+
+          <MissionsSection course={course} progress={progress} onStart={onStartMission} onChangeGoal={() => setEditingGoal(true)} />
 
           <section className="curriculum" aria-labelledby="curriculum-title">
             <div className="section-heading">
@@ -100,7 +166,7 @@ export function Home({ course, progress, todayXp, streak, onStart, onPractice, o
                   aria-labelledby={`level-${course.id}-${level}`}
                 >
                   <header className="learning-level-head">
-                    <span className="learning-level-code">{info.cefr}</span>
+                    <span className="learning-level-code">{info.stage}</span>
                     <div className="learning-level-title">
                       <span className="eyebrow">STAGE {String(levelIndex + 1).padStart(2, '0')}</span>
                       <h3 id={`level-${course.id}-${level}`}>{info.title}</h3>
@@ -134,6 +200,7 @@ export function Home({ course, progress, todayXp, streak, onStart, onPractice, o
                           </div>
                           <span className="unit-count">{unitDone}/{unit.lessons.length}</span>
                         </header>
+                        {unit.notes && unlocked && <UsageNotes course={course} notes={unit.notes} className="unit-notes" />}
                         <ol className="steps">
                           {unit.lessons.map((lesson, lessonIndex) => {
                             const completed = lesson.id in progress.completed;
@@ -169,6 +236,22 @@ export function Home({ course, progress, todayXp, streak, onStart, onPractice, o
             <p className="daily-copy">{goalMet ? 'Lovely work. Your daily goal is in the bag.' : 'Small, steady practice is how fluency happens.'}</p>
             <div className="daily-meter"><span style={{ width: `${Math.min(100, (100 * todayXp) / progress.dailyGoal)}%` }} /></div>
             <div className="daily-metric"><strong>{todayXp} <span>XP</span></strong><span>of {progress.dailyGoal} daily goal</span></div>
+            <div className="goal-choices" role="group" aria-label="Choose your daily XP goal">
+              <span>Choose your pace</span>
+              <div>
+                {DAILY_PACES.map((goal) => (
+                  <button
+                    key={goal.value}
+                    type="button"
+                    aria-pressed={progress.dailyGoal === goal.value}
+                    className={progress.dailyGoal === goal.value ? 'selected' : ''}
+                    onClick={() => onSetDailyGoal(goal.value)}
+                  >
+                    {goal.label}<small>{goal.value} XP</small>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="streak-row"><span className="streak-icon">✳</span><span><strong>{streak} day{streak === 1 ? '' : 's'}</strong><small>your current streak</small></span><span className="streak-sparkle">✦</span></div>
           </section>
 
@@ -181,9 +264,30 @@ export function Home({ course, progress, todayXp, streak, onStart, onPractice, o
 
           <section className="practice-card card">
             <span className="practice-icon" aria-hidden="true">↗</span>
-            <div><span className="eyebrow">MAKE IT STICK</span><h2>Practice what you know</h2><p>A quick review brings yesterday’s words back into reach.</p></div>
-            <button type="button" className="btn ghost" onClick={onPractice}>Start a review <span aria-hidden="true">→</span></button>
+            <div>
+              <span className="eyebrow">MAKE IT STICK</span>
+              <h2>{dueReviewCount ? `${dueReviewCount} words ready to revisit` : 'You’re caught up'}</h2>
+              <p>{dueReviewCount ? 'A short, focused review brings words back before they fade.' : 'Words will appear here when they are due for review.'}</p>
+              {recall && recall.attempts > 0 && (
+                <p className="recall-stat" title="Answers given a week or more after you last saw the word">
+                  <strong>{Math.round((100 * recall.correct) / recall.attempts)}%</strong> remembered after a week or more
+                  <small> ({recall.correct} of {recall.attempts})</small>
+                </p>
+              )}
+            </div>
+            <button type="button" className="btn ghost" disabled={!dueReviewCount} onClick={onStartReview}>
+              Review due words <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" className="link-btn practice-mixed" onClick={onPractice}>Start mixed practice</button>
           </section>
+          {course.glossary && (
+            <section className="reading-card card">
+              <span className="eyebrow">READING SUPPORT</span>
+              <RomanToggle shown={progress.showRoman} onToggle={onToggleRoman} />
+            </section>
+          )}
+          <Phrasebook entries={progress.savedPhrases} onRemove={onRemovePhrase} />
+          <OfflineCard />
           <footer className="home-foot">
             <button type="button" className="link-btn" onClick={() => {
               if (confirm('Reset all progress in every course? This cannot be undone.')) onReset();

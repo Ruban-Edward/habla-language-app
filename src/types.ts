@@ -13,6 +13,12 @@ export type Lesson = {
   words: Word[];
   sentences: Sentence[];
 };
+/** A short explanation of how words work: gender, register, spelling, regional use. */
+export type UsageNote = {
+  title: string;
+  body: string;
+  examples?: { t: string; en: string; roman?: string }[];
+};
 export type Unit = {
   id: string;
   title: string;
@@ -20,6 +26,38 @@ export type Unit = {
   color: string;
   level?: LearningLevel;
   lessons: Lesson[];
+  /** Usage notes shown with the unit's lessons. */
+  notes?: UsageNote[];
+};
+
+/** Why the learner is studying; used to suggest relevant missions. */
+export type LearningReason = 'travel' | 'people' | 'work' | 'curious';
+
+export type MissionLine = { t: string; en: string; roman?: string };
+export type MissionReply = MissionLine & {
+  /** Whether this is a natural, appropriate reply in context. */
+  correct: boolean;
+  /** Why the reply works, or a correction explaining what to change. */
+  feedback: string;
+};
+export type MissionTurn = {
+  /** What the other person says. */
+  partner: MissionLine;
+  /** What the learner wants to get across, in English. */
+  goal: string;
+  replies: MissionReply[];
+};
+/** A short real-life task: a dialogue the learner takes part in. */
+export type Mission = {
+  id: string;
+  title: string;
+  emoji: string;
+  /** The situation, in English. */
+  scenario: string;
+  /** Unit whose vocabulary the mission draws on. */
+  afterUnit: string;
+  reasons: LearningReason[];
+  turns: MissionTurn[];
 };
 
 export type Course = {
@@ -41,6 +79,7 @@ export type Course = {
   /** Word → romanization, for courses in a non-Latin script. */
   glossary?: Record<string, string>;
   units: Unit[];
+  missions?: Mission[];
 };
 
 export type Side = 't' | 'en';
@@ -57,6 +96,7 @@ export type ChoiceExercise = {
   optionSide: Side;
   options: ChoiceOption[];
   answer: string;
+  reviewIds?: string[];
 };
 
 export type TilesExercise = {
@@ -72,6 +112,7 @@ export type TilesExercise = {
   /** Romanization for target-language tiles, when the course has one. */
   roman?: Record<string, string>;
   accepted: string[];
+  reviewIds?: string[];
 };
 
 export type TypeExercise = {
@@ -83,6 +124,7 @@ export type TypeExercise = {
   promptSide: Side;
   answerSide: Side;
   accepted: string[];
+  reviewIds?: string[];
 };
 
 export type MatchExercise = {
@@ -90,6 +132,7 @@ export type MatchExercise = {
   key: string;
   instruction: string;
   pairs: { t: string; en: string; roman?: string }[];
+  reviewIds?: string[];
 };
 
 export type Exercise = ChoiceExercise | TilesExercise | TypeExercise | MatchExercise;
@@ -99,6 +142,7 @@ export type CheckResult = { correct: boolean; answer: string; answerRoman?: stri
 export type SessionResult = {
   practice: boolean;
   lessonId?: string;
+  missionId?: string;
   mistakes: number;
   accuracy: number;
   durationMs: number;

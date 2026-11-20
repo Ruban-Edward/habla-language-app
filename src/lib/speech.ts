@@ -441,3 +441,72 @@ export async function speak(
     }
   });
 }
+
+/* ---------- Offline audio ---------- */
+
+export type FrenchVoiceStatus = 'downloaded' | 'missing' | 'unavailable';
+
+/** Whether the built-in French voice files are stored in this browser (without loading the 63 MB model). */
+export async function frenchVoiceStatus(): Promise<FrenchVoiceStatus> {
+  if (typeof window === 'undefined' || !('caches' in window) || !hasAudioContext()) return 'unavailable';
+  try {
+    const cache = await window.caches.open(frenchModelCache);
+    const [model, config] = await Promise.all([cache.match(frenchModelUrl), cache.match(frenchConfigUrl)]);
+    if (!model || !config) return 'missing';
+    const size = Number(model.headers.get('content-length'));
+    return !size || size === frenchVoiceModelSizeBytes ? 'downloaded' : 'missing';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+/**
+ * Download and prepare the French voice so it works offline: the model and config go to browser storage,
+ * and loading the speech engine lets the service worker keep its code for offline use.
+ */
+export async function downloadFrenchVoice(
+  onProgress: (progress: SpeechProgress) => void,
+): Promise<{ ok: true; warning?: string } | { ok: false; message: string }> {
+  if (!hasAudioContext()) return { ok: false, message: 'This browser cannot play the built-in French voice.' };
+  try {
+    const runtime = await getFrenchRuntime(onProgress);
+    return { ok: true, warning: runtime.cacheWarning ?? undefined };
+  } catch (error) {
+    return { ok: false, message: errorText(error) };
+  }
+}
+
+/** Remove the stored French voice to free space. It downloads again on next use. */
+export async function removeFrenchVoice(): Promise<void> {
+  const runtime = frenchRuntimePromise ? await frenchRuntimePromise.catch(() => null) : null;
+  frenchRuntimePromise = null;
+  await runtime?.session.release().catch(() => undefined);
+  if ('caches' in window) await window.caches.delete(frenchModelCache);
+}
+
+export type DeviceVoiceStatus =
+  | { kind: 'offline'; name: string }
+  | { kind: 'online'; name: string }
+  | { kind: 'missing' }
+  | { kind: 'unsupported' };
+
+/**
+ * Describe the device voice used for a language. `localService` voices are installed on the device and
+ * work without a connection; network voices need the internet.
+ */
+export function deviceVoiceStatus(lang: string): DeviceVoiceStatus {
+  if (!speechSupported) return { kind: 'unsupported' };
+  const requested = lang.toLowerCase().replace(/_/g, '-');
+  const prefix = requested.split('-')[0];
+  const matching = voices().filter((voice) => voice.lang.toLowerCase().replace(/_/g, '-').split('-')[0] === prefix);
+  if (!matching.length) return { kind: 'missing' };
+  const local = matching.find((voice) => voice.localService);
+  return local ? { kind: 'offline', name: local.name } : { kind: 'online', name: matching[0].name };
+}
+
+/** Call back when the browser's voice list changes (voices often load after the page). */
+export function onVoicesChanged(callback: () => void): () => void {
+  if (!speechSupported) return () => undefined;
+  window.speechSynthesis.addEventListener('voiceschanged', callback);
+  return () => window.speechSynthesis.removeEventListener('voiceschanged', callback);
+}

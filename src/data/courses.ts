@@ -1,36 +1,67 @@
-import type { Course, LearningLevel, Lesson, Unit } from '../types';
+import type { Course, LearningLevel, LearningReason, Lesson, Mission, Unit } from '../types';
 import { spanish } from './courses/es';
 import { french } from './courses/fr';
 import { hindi } from './courses/hi';
+import { MISSIONS } from './missions';
+import { USAGE_NOTES } from './notes';
 
-/** Course ids are prefixed onto unit and lesson ids so progress never collides between courses. */
+/**
+ * Course ids are prefixed onto unit, lesson and mission ids so progress never collides between courses.
+ * Usage notes and missions live in their own files (for easier review) and are attached here.
+ */
 function withPrefixedIds(c: Course): Course {
   return {
     ...c,
     units: c.units.map((u) => ({
       ...u,
       id: `${c.id}-${u.id}`,
+      notes: u.notes ?? USAGE_NOTES[c.id]?.[u.id],
       lessons: u.lessons.map((l) => ({ ...l, id: `${c.id}-${l.id}` })),
+    })),
+    missions: (c.missions ?? MISSIONS[c.id] ?? []).map((m) => ({
+      ...m,
+      id: `${c.id}-${m.id}`,
+      afterUnit: `${c.id}-${m.afterUnit}`,
     })),
   };
 }
 
 export const COURSES: Course[] = [spanish, french, hindi].map(withPrefixedIds);
+
+export const LEARNING_REASONS: { id: LearningReason; label: string; hint: string; emoji: string }[] = [
+  { id: 'travel', label: 'Travel', hint: 'Get around, eat out and ask for help', emoji: '🧳' },
+  { id: 'people', label: 'People I know', hint: 'Talk with friends, family or a partner', emoji: '💬' },
+  { id: 'work', label: 'Work', hint: 'Meet colleagues and handle everyday tasks', emoji: '💼' },
+  { id: 'curious', label: 'Just curious', hint: 'Explore the language at your own pace', emoji: '✨' },
+];
+
+/** Missions in the order to suggest them: matching the learner's reason first, then by path order. */
+export function missionsFor(course: Course, reason: LearningReason | null): Mission[] {
+  const unitOrder = (m: Mission) => course.units.findIndex((u) => u.id === m.afterUnit);
+  return [...(course.missions ?? [])].sort((a, b) => {
+    const fit = Number(reason !== null && b.reasons.includes(reason)) - Number(reason !== null && a.reasons.includes(reason));
+    return fit || unitOrder(a) - unitOrder(b);
+  });
+}
+
+export function findMission(course: Course, id: string): Mission | undefined {
+  return course.missions?.find((m) => m.id === id);
+}
 export const LEARNING_LEVELS: LearningLevel[] = ['beginner', 'intermediate', 'advanced'];
-export const LEVEL_INFO: Record<LearningLevel, { cefr: string; title: string; description: string }> = {
+export const LEVEL_INFO: Record<LearningLevel, { stage: string; title: string; description: string }> = {
   beginner: {
-    cefr: 'A1',
-    title: 'Beginner',
+    stage: '01',
+    title: 'Starter',
     description: 'Build your foundations for everyday conversation.',
   },
   intermediate: {
-    cefr: 'A2–B1',
-    title: 'Intermediate',
+    stage: '02',
+    title: 'Everyday',
     description: 'Use the language with growing independence.',
   },
   advanced: {
-    cefr: 'B2',
-    title: 'Advanced',
+    stage: '03',
+    title: 'More confident',
     description: 'Express nuanced ideas with confidence.',
   },
 };

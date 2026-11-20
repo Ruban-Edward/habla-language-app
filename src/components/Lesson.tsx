@@ -10,6 +10,8 @@ import { TypeAnswer } from './exercises/TypeAnswer';
 import { LessonPreview } from './LessonPreview';
 import { Mascot } from './Mascot';
 import { Modal } from './ui';
+import type { SavedPhrase } from '../lib/progress';
+import { RomanToggle } from './RomanToggle';
 
 type Props = {
   course: Course;
@@ -18,6 +20,12 @@ type Props = {
   practice: boolean;
   hearts: number;
   sound: boolean;
+  savedPhrases: SavedPhrase[];
+  showRoman: boolean;
+  userId: string | null;
+  onToggleRoman: () => void;
+  onTogglePhrase: (phrase: Omit<SavedPhrase, 'id' | 'createdAt'>) => void;
+  onReview: (targets: string[], correct: boolean) => void;
   onWrong: () => void;
   onExit: () => void;
   onFinish: (r: SessionResult) => void;
@@ -27,7 +35,24 @@ type Props = {
 const PRAISE = ['Nice!', 'Great job!', 'Correct!', 'You got it!'];
 
 export function Lesson(props: Props) {
-  const { course, exercises, lessonId, practice, hearts, sound, onWrong, onExit, onFinish, onOutOfHearts } = props;
+  const {
+    course,
+    exercises,
+    lessonId,
+    practice,
+    hearts,
+    sound,
+    savedPhrases,
+    showRoman,
+    userId,
+    onToggleRoman,
+    onTogglePhrase,
+    onReview,
+    onWrong,
+    onExit,
+    onFinish,
+    onOutOfHearts,
+  } = props;
   const lesson = lessonId ? findLesson(course, lessonId) : undefined;
   const [showPreview, setShowPreview] = useState(!practice && !!lesson?.words.length);
   const praise = [...PRAISE, ...course.praise];
@@ -40,6 +65,7 @@ export function Lesson(props: Props) {
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [outOfHearts, setOutOfHearts] = useState(false);
   const startedAt = useRef(Date.now());
+  const reviewedWords = useRef(new Set<string>());
 
   const current = queue[index];
   const total = exercises.length;
@@ -49,6 +75,11 @@ export function Lesson(props: Props) {
     if (result || answer === null) return;
     const r = checkExercise(current, answer);
     setResult(r);
+    if (!current.key.includes('~')) {
+      const newReviewIds = (current.reviewIds ?? []).filter((id) => !reviewedWords.current.has(id));
+      for (const id of newReviewIds) reviewedWords.current.add(id);
+      if (newReviewIds.length) onReview(newReviewIds, r.correct);
+    }
     if (r.correct) {
       setCorrectCount((c) => c + 1);
       if (sound) sfx.correct();
@@ -59,7 +90,7 @@ export function Lesson(props: Props) {
       setQueue((q) => [...q, { ...current, key: `${current.key}~${q.length}` }]);
       if (!practice) onWrong();
     }
-  }, [answer, current, onWrong, practice, result, sound]);
+  }, [answer, current, onReview, onWrong, practice, result, sound]);
 
   const next = useCallback(() => {
     if (!result) return;
@@ -116,6 +147,7 @@ export function Lesson(props: Props) {
         >
           <span style={{ width: `${showPreview ? 0 : (100 * correctCount) / total}%` }} />
         </div>
+        {course.glossary && <RomanToggle compact shown={showRoman} onToggle={onToggleRoman} />}
         {practice ? (
           <span className="badge">Practice</span>
         ) : (
@@ -127,7 +159,14 @@ export function Lesson(props: Props) {
 
       <main className="lesson-body">
         {showPreview && lesson ? (
-          <LessonPreview course={course} lesson={lesson} unit={unitOf(course, lesson.id)} />
+          <LessonPreview
+            course={course}
+            lesson={lesson}
+            unit={unitOf(course, lesson.id)}
+            savedPhrases={savedPhrases}
+            userId={userId}
+            onTogglePhrase={onTogglePhrase}
+          />
         ) : (
           <>
             {isRetry && <p className="retry-tag">↻ Let's try that again</p>}

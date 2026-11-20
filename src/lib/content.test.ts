@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   COURSES,
+  findMission,
   getCourse,
+  missionsFor,
   isLevelComplete,
   isLevelUnlocked,
   isUnlocked,
@@ -11,7 +13,7 @@ import {
 } from '../data/courses';
 import { checkText, expandAll, normalize, primary, toTiles } from './answer';
 import { checkExercise } from './check';
-import { generateLesson, generatePractice } from './generate';
+import { generateLesson, generatePractice, generateReview } from './generate';
 
 describe('courses', () => {
   it('offers Spanish, French and Hindi', () => {
@@ -49,6 +51,40 @@ describe('courses', () => {
         }
       });
 
+      it('has usage notes for every unit', () => {
+        for (const unit of course.units) {
+          expect(unit.notes?.length ?? 0, unit.id).toBeGreaterThan(0);
+          for (const note of unit.notes ?? []) {
+            expect(note.title.trim(), unit.id).not.toBe('');
+            expect(note.body.trim(), unit.id).not.toBe('');
+            if (course.glossary) for (const example of note.examples ?? []) expect(example.roman, example.t).toBeTruthy();
+          }
+        }
+      });
+
+      it('has well-formed real-life missions', () => {
+        const missions = course.missions ?? [];
+        expect(missions.length).toBeGreaterThanOrEqual(3);
+        expect(new Set(missions.map((m) => m.id)).size).toBe(missions.length);
+        for (const mission of missions) {
+          expect(mission.id.startsWith(`${course.id}-`)).toBe(true);
+          expect(course.units.some((u) => u.id === mission.afterUnit), `${mission.id} afterUnit`).toBe(true);
+          expect(mission.reasons.length, mission.id).toBeGreaterThan(0);
+          expect(mission.turns.length, mission.id).toBeGreaterThanOrEqual(3);
+          for (const turn of mission.turns) {
+            const lines = [turn.partner, ...turn.replies];
+            expect(turn.replies.some((r) => r.correct), `${mission.id}: ${turn.goal}`).toBe(true);
+            expect(turn.replies.some((r) => !r.correct), `${mission.id}: ${turn.goal}`).toBe(true);
+            expect(new Set(turn.replies.map((r) => normalize(r.t))).size, turn.goal).toBe(turn.replies.length);
+            for (const reply of turn.replies) expect(reply.feedback.trim(), reply.t).not.toBe('');
+            for (const line of lines) {
+              expect(line.en.trim(), line.t).not.toBe('');
+              if (course.glossary) expect(line.roman, line.t).toBeTruthy();
+            }
+          }
+        }
+      });
+
       it('every sentence pattern expands', () => {
         for (const l of lessonsOf(course))
           for (const s of l.sentences) {
@@ -62,6 +98,16 @@ describe('courses', () => {
         expect(isUnlocked(course, a.id, {})).toBe(true);
         expect(isUnlocked(course, b.id, {})).toBe(false);
         expect(isUnlocked(course, b.id, { [a.id]: {} })).toBe(true);
+      });
+
+      it('generates short review questions tied to the vocabulary being reviewed', () => {
+        const lesson = lessonsOf(course).find((item) => item.kind !== 'script')!;
+        const word = lesson.words[0];
+        const review = generateReview(course, [word], { speech: false });
+        expect(review).toHaveLength(1);
+        expect(review[0].reviewIds).toEqual([word.t]);
+        expect(review[0].kind).toBe('choice');
+        expect(checkExercise(review[0], word.t).correct).toBe(true);
       });
 
       for (const speech of [true, false]) {
@@ -105,6 +151,23 @@ describe('courses', () => {
       }
     });
   }
+});
+
+describe('missions', () => {
+  it('suggests missions that fit the learner’s reason first', () => {
+    const spanish = getCourse('es');
+    expect(missionsFor(spanish, 'work')[0].reasons).toContain('work');
+    expect(missionsFor(spanish, 'travel')[0].reasons).toContain('travel');
+    expect(missionsFor(spanish, null).map((m) => m.id)).toHaveLength(spanish.missions!.length);
+    expect(findMission(spanish, 'es-cafe')?.title).toBe('Order at a café');
+  });
+
+  it('accepts a typed reply that matches a natural answer', () => {
+    const turn = findMission(getCourse('fr'), 'fr-cafe')!.turns[0];
+    const accepted = turn.replies.filter((r) => r.correct).map((r) => r.t);
+    expect(checkText("bonjour, un cafe, s'il vous plait", accepted, { typos: true }).correct).toBe(true);
+    expect(checkText('un café', accepted, { typos: true }).correct).toBe(false);
+  });
 });
 
 describe('Hindi', () => {

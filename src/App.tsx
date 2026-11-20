@@ -1,29 +1,45 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AccountPanel } from './components/AccountPanel';
 import { Complete } from './components/Complete';
 import { CoursePicker } from './components/CoursePicker';
 import { Home } from './components/Home';
 import { Lesson } from './components/Lesson';
+import { MissionScreen } from './components/MissionScreen';
 import { OutOfHearts } from './components/OutOfHearts';
 import { TopBar } from './components/TopBar';
-import { findLesson, getCourse, lessonsOf } from './data/courses';
-import { generateLesson, generatePractice } from './lib/generate';
+import { findLesson, findMission, getCourse, lessonsOf } from './data/courses';
+import { generateLesson, generatePractice, generateReview } from './lib/generate';
 import {
   currentStreak,
   dayKey,
+  dueWordIds,
   gainHeart,
   initialProgress,
   loadProgress,
   loseHeart,
   msUntilNextHeart,
+  recordMission,
+  recordWordReview,
   recordSession,
   regenHearts,
+  removeSavedPhrase,
   saveProgress,
   todayXp,
+  toggleSavedPhrase,
   xpFor,
 } from './lib/progress';
-import { errorMessage, loadCloudProgress, saveCloudProgress, supabase } from './lib/supabase';
+import { mergeProgress, sameProgress } from './lib/merge';
+import { errorMessage, loadCloudSave, saveCloudSaveIfUnchanged, supabase } from './lib/supabase';
+import {
+  loadProgressOwner,
+  loadSyncBase,
+  storeProgressOwner,
+  storeSyncBase,
+  syncWithCloud,
+  type SyncBase,
+} from './lib/sync';
+import { useOnline } from './lib/offline';
 import { hasVoice } from './lib/speech';
 import type { Exercise, SessionResult } from './types';
 
@@ -31,6 +47,7 @@ type Screen =
   | { name: 'home' }
   | { name: 'courses' }
   | { name: 'lesson'; run: number; lessonId?: string; practice: boolean; exercises: Exercise[] }
+  | { name: 'mission'; run: number; missionId: string }
   | {
       name: 'complete';
       result: SessionResult;
@@ -57,12 +74,17 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(!supabase);
-  const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [retrySync, setRetrySync] = useState(0);
   const [showAccount, setShowAccount] = useState(false);
+  const online = useOnline();
   const progressRef = useRef(progress);
-  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  /** Signed-in user whose progress is being synced. */
+  const syncUser = useRef<string | null>(null);
+  const syncBase = useRef<SyncBase | null>(null);
+  const syncRunning = useRef(false);
+  const syncAgain = useRef(false);
+  const syncTimer = useRef<number | undefined>(undefined);
   const course = getCourse(progress.course);
 
   useEffect(() => {
@@ -94,44 +116,87 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!authReady || !session) {
-      setHydratedUserId(null);
+  /**
+   * Merge this device's progress with the cloud save and write the result back. Only one sync runs at a
+   * time; changes made meanwhile trigger another round. Offline, it waits for the connection to return.
+   */
+  const runSync = useCallback(async () => {
+    if (syncRunning.current) {
+      syncAgain.current = true;
       return;
     }
-    let active = true;
-    const userId = session.user.id;
-    setHydratedUserId(null);
-    setSyncError(null);
-    void (async () => {
-      try {
-        const cloudProgress = await loadCloudProgress(userId);
-        if (!active) return;
-        if (cloudProgress) {
-          setProgress(cloudProgress);
-        } else {
-          await saveCloudProgress(userId, progressRef.current);
+    syncRunning.current = true;
+    try {
+      do {
+        syncAgain.current = false;
+        const userId = syncUser.current;
+        if (!userId) return;
+        if (!navigator.onLine) {
+          setSyncError(null);
+          return;
         }
-        if (active) setHydratedUserId(userId);
-      } catch (error) {
-        if (active) setSyncError(`Could not load cloud progress: ${errorMessage(error)}`);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [authReady, session?.user.id, retrySync]);
+        const sent = progressRef.current;
+        const owner = loadProgressOwner();
+        try {
+          const result = await syncWithCloud(
+            sent,
+            syncBase.current,
+            {
+              load: () => loadCloudSave(userId),
+              saveIfUnchanged: (next, expected) => saveCloudSaveIfUnchanged(userId, next, expected),
+            },
+            { replaceLocal: owner !== null && owner !== userId },
+          );
+          if (syncUser.current !== userId) return;
+          syncBase.current = result;
+          storeSyncBase(userId, result);
+          storeProgressOwner(userId);
+          setProgress((current) => {
+            // Keep anything learned on this device while the sync was in flight.
+            const next = current === sent ? result.progress : mergeProgress(current, result.progress, sent);
+            return sameProgress(next, current) ? current : next;
+          });
+          setSyncError(null);
+        } catch (error) {
+          if (syncUser.current === userId) setSyncError(`Could not sync progress: ${errorMessage(error)}`);
+          return;
+        }
+      } while (syncAgain.current);
+    } finally {
+      syncRunning.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const userId = authReady && session ? session.user.id : null;
+    syncUser.current = userId;
+    syncBase.current = userId ? loadSyncBase(userId) : null;
+    setSyncError(null);
+    if (userId) void runSync();
+  }, [authReady, session?.user.id, retrySync, runSync]);
 
   useEffect(() => {
     saveProgress(progress);
-    if (!session || hydratedUserId !== session.user.id) return;
-    const userId = session.user.id;
-    saveQueue.current = saveQueue.current
-      .catch(() => undefined)
-      .then(() => saveCloudProgress(userId, progress))
-      .then(() => setSyncError(null))
-      .catch((error: unknown) => setSyncError(`Could not sync progress: ${errorMessage(error)}`));
-  }, [progress, session?.user.id, hydratedUserId]);
+    if (!syncUser.current) return;
+    window.clearTimeout(syncTimer.current);
+    syncTimer.current = window.setTimeout(() => void runSync(), 1500);
+    return () => window.clearTimeout(syncTimer.current);
+  }, [progress, runSync]);
+
+  useEffect(() => {
+    if (online && syncUser.current) void runSync();
+  }, [online, runSync]);
+
+  useEffect(() => {
+    // Pick up progress from other devices when returning to the app, and send pending changes when leaving.
+    const onVisibility = () => {
+      if (!syncUser.current) return;
+      window.clearTimeout(syncTimer.current);
+      void runSync();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [runSync]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -149,6 +214,10 @@ export default function App() {
   useEffect(() => {
     document.documentElement.style.setProperty('--course', course.color);
   }, [course.color]);
+
+  useEffect(() => {
+    document.documentElement.dataset.roman = progress.showRoman ? 'shown' : 'hidden';
+  }, [progress.showRoman]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -186,6 +255,44 @@ export default function App() {
     setScreen({ name: 'lesson', run: Date.now(), practice: true, exercises: generatePractice(course, lessons, genOpts()) });
   };
 
+  /** Due words that still exist in the course; stale ids from older content are skipped. */
+  const dueWords = (at: number) => {
+    const wordsById = new Map(
+      lessonsOf(course)
+        .filter((lesson) => lesson.kind !== 'script')
+        .flatMap((lesson) => lesson.words.map((word) => [word.t, word] as const)),
+    );
+    return dueWordIds(progress, course.id, at)
+      .map((id) => wordsById.get(id))
+      .filter((word) => word !== undefined);
+  };
+
+  const startDueReview = () => {
+    const words = dueWords(Date.now());
+    if (!words.length) return;
+    setScreen({
+      name: 'lesson',
+      run: Date.now(),
+      practice: true,
+      exercises: generateReview(course, words, genOpts()),
+    });
+  };
+
+  const reviewWords = (targets: string[], correct: boolean) => {
+    setProgress((p) => recordWordReview(p, course.id, targets, correct, Date.now()));
+  };
+
+  const togglePhrase = (phrase: Parameters<typeof toggleSavedPhrase>[1]) => {
+    setProgress((p) => toggleSavedPhrase(p, phrase, Date.now()));
+  };
+
+  const toggleRoman = () => setProgress((p) => ({ ...p, showRoman: !p.showRoman }));
+
+  const startMission = (missionId: string) => {
+    if (!findMission(course, missionId)) return;
+    setScreen({ name: 'mission', run: Date.now(), missionId });
+  };
+
   const finish = (result: SessionResult) => {
     const t = Date.now();
     const xp = xpFor(result);
@@ -196,6 +303,7 @@ export default function App() {
       { courseId: course.id, lessonId: result.lessonId, xp, accuracy: result.accuracy },
       t,
     );
+    if (result.missionId) next = recordMission(next, result.missionId, result.accuracy);
     const heartBefore = regenHearts(next, t).hearts;
     if (result.practice) next = gainHeart(next, t);
     const streak = currentStreak(next, t);
@@ -257,6 +365,11 @@ export default function App() {
 
   return (
     <div className="app">
+      {!online && (
+        <p className="offline-banner" role="status">
+          You’re offline. Lessons, missions and your phrasebook still work; sync resumes when you reconnect.
+        </p>
+      )}
       {screen.name === 'home' && (
         <>
           <TopBar
@@ -277,10 +390,17 @@ export default function App() {
             course={course}
             progress={progress}
             todayXp={todayXp(progress, now)}
+            dueReviewCount={dueWords(now).length}
             streak={streak}
             onStart={startLesson}
             onPractice={startPractice}
-            onReset={() => setProgress({ ...initialProgress(Date.now()), course: progress.course })}
+            onStartReview={startDueReview}
+            onStartMission={startMission}
+            onSetDailyGoal={(goal) => setProgress((p) => ({ ...p, dailyGoal: goal }))}
+            onSetGoal={(reason, goal) => setProgress((p) => ({ ...p, learningReason: reason, dailyGoal: goal }))}
+            onToggleRoman={toggleRoman}
+            onRemovePhrase={(id) => setProgress((p) => removeSavedPhrase(p, id))}
+            onReset={() => setProgress({ ...initialProgress(Date.now()), course: progress.course, resetAt: Date.now() })}
           />
         </>
       )}
@@ -294,12 +414,38 @@ export default function App() {
           practice={screen.practice}
           hearts={progress.hearts}
           sound={progress.sound}
+          savedPhrases={progress.savedPhrases}
+          showRoman={progress.showRoman}
+          userId={session?.user.id ?? null}
+          onToggleRoman={toggleRoman}
+          onTogglePhrase={togglePhrase}
+          onReview={reviewWords}
           onWrong={() => setProgress((p) => loseHeart(p, Date.now()))}
           onExit={() => setScreen({ name: 'home' })}
           onFinish={finish}
           onOutOfHearts={() => setScreen({ name: 'nohearts' })}
         />
       )}
+
+      {screen.name === 'mission' && (() => {
+        const mission = findMission(course, screen.missionId);
+        if (!mission) return null;
+        return (
+          <MissionScreen
+            key={screen.run}
+            course={course}
+            mission={mission}
+            sound={progress.sound}
+            showRoman={progress.showRoman}
+            savedPhrases={progress.savedPhrases}
+            userId={session?.user.id ?? null}
+            onToggleRoman={toggleRoman}
+            onTogglePhrase={togglePhrase}
+            onExit={() => setScreen({ name: 'home' })}
+            onFinish={finish}
+          />
+        );
+      })()}
 
       {screen.name === 'complete' && (
         <Complete

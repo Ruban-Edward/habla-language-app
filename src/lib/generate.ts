@@ -56,6 +56,7 @@ function meaningChoice(key: string, word: Word, pool: Word[], ctx: Ctx): Exercis
     optionSide: 't',
     options,
     answer: word.t,
+    reviewIds: ctx.script ? [] : [word.t],
   };
 }
 
@@ -69,6 +70,7 @@ function soundChoice(key: string, word: Word, pool: Word[], ctx: Ctx): Exercise 
     optionSide: 'en',
     options,
     answer: word.en,
+    reviewIds: ctx.script ? [] : [word.t],
   };
 }
 
@@ -77,7 +79,16 @@ function listenChoice(key: string, word: Word, pool: Word[], ctx: Ctx): Exercise
     label: w.t,
     roman: roman(ctx, w.t),
   }));
-  return { kind: 'choice', key, instruction: 'Tap what you hear', audio: word.t, optionSide: 't', options, answer: word.t };
+  return {
+    kind: 'choice',
+    key,
+    instruction: 'Tap what you hear',
+    audio: word.t,
+    optionSide: 't',
+    options,
+    answer: word.t,
+    reviewIds: ctx.script ? [] : [word.t],
+  };
 }
 
 function match(key: string, words: Word[], ctx: Ctx): Exercise {
@@ -215,4 +226,14 @@ export function generatePractice(course: Course, lessons: Lesson[], opts: Genera
     ...head,
     ...sample(sentencePool, 5).map((s, i) => sentenceExercise(key(), s, kinds[i % kinds.length], pool, ctx)),
   ];
+}
+
+/** Create a short, word-focused session from vocabulary whose review date has arrived. */
+export function generateReview(course: Course, words: Word[], opts: GenerateOptions): Exercise[] {
+  const ctx: Ctx = { course, speech: opts.speech, script: false, fallback: wordsOfKind(course, false) };
+  return shuffle(words).slice(0, 8).map((word, i) =>
+    opts.speech && i % 2 === 1
+      ? listenChoice(`review-${i}`, word, ctx.fallback, ctx)
+      : meaningChoice(`review-${i}`, word, ctx.fallback, ctx),
+  );
 }

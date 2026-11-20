@@ -21,7 +21,7 @@ export function Complete({ result, xp, streak, streakUp, heartGained, goalJustMe
         ))}
       </div>
       <Mascot mood="cheer" size={128} />
-      <h1>{result.practice ? 'Practice complete!' : 'Lesson complete!'}</h1>
+      <h1>{result.missionId ? 'Mission complete!' : result.practice ? 'Practice complete!' : 'Lesson complete!'}</h1>
       {result.mistakes === 0 && <p className="perfect">Perfect, no mistakes ✨</p>}
 
       <div className="stat-cards">

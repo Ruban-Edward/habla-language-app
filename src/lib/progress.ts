@@ -1,8 +1,31 @@
+import type { LearningReason } from '../types';
+
 export const MAX_HEARTS = 5;
 export const HEART_REFILL_MS = 15 * 60 * 1000;
+export const REVIEW_RETRY_MS = 15 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** A review counts toward week-later recall when the word was last seen at least this long ago. */
+export const RECALL_GAP_MS = 7 * DAY_MS;
+const REVIEW_INTERVAL_DAYS = [1, 3, 7, 14, 30];
 const STORAGE_KEY = 'habla:v1';
 
 export type LessonRecord = { times: number; bestAccuracy: number };
+export type WordReview = {
+  dueAt: number;
+  intervalDays: number;
+  repetitions: number;
+  lastReviewedAt: number;
+};
+export type SavedPhrase = {
+  id: string;
+  courseId: string;
+  target: string;
+  meaning: string;
+  roman?: string;
+  createdAt: number;
+};
+export type PhraseDraft = Omit<SavedPhrase, 'id' | 'createdAt'>;
+export type RecallStats = { attempts: number; correct: number };
 
 export type Progress = {
   xp: number;
@@ -18,6 +41,17 @@ export type Progress = {
   /** The course being studied; null until the learner picks one. */
   course: string | null;
   courseXp: Record<string, number>;
+  wordReviews: Record<string, WordReview>;
+  savedPhrases: SavedPhrase[];
+  /** Show romanization for non-Latin scripts (learners can turn it off as they gain confidence). */
+  showRoman: boolean;
+  /** Why the learner is studying; null until they choose. */
+  learningReason: LearningReason | null;
+  missions: Record<string, LessonRecord>;
+  /** Per course: answers given a week or more after the learner last saw the word. */
+  recall: Record<string, RecallStats>;
+  /** When all progress was last reset (0 if never), so a reset isn't undone by syncing older data. */
+  resetAt: number;
 };
 
 export function initialProgress(now: number): Progress {
@@ -33,7 +67,80 @@ export function initialProgress(now: number): Progress {
     dailyXp: {},
     dailyGoal: 30,
     sound: true,
+    wordReviews: {},
+    savedPhrases: [],
+    showRoman: true,
+    learningReason: null,
+    missions: {},
+    recall: {},
+    resetAt: 0,
   };
+}
+
+export function wordReviewKey(courseId: string, target: string): string {
+  return `${courseId}:${target}`;
+}
+
+export function dueWordIds(p: Progress, courseId: string, now: number): string[] {
+  const prefix = `${courseId}:`;
+  return Object.entries(p.wordReviews)
+    .filter(([key, review]) => key.startsWith(prefix) && review.dueAt <= now)
+    .sort((a, b) => a[1].dueAt - b[1].dueAt)
+    .map(([key]) => key.slice(prefix.length));
+}
+
+export function recordWordReview(
+  p: Progress,
+  courseId: string,
+  targets: string[],
+  correct: boolean,
+  now: number,
+): Progress {
+  const wordReviews = { ...p.wordReviews };
+  let recall = p.recall[courseId] ?? { attempts: 0, correct: 0 };
+  let recallChanged = false;
+  for (const target of new Set(targets)) {
+    const key = wordReviewKey(courseId, target);
+    const previous = wordReviews[key];
+    if (previous && now - previous.lastReviewedAt >= RECALL_GAP_MS) {
+      recall = { attempts: recall.attempts + 1, correct: recall.correct + (correct ? 1 : 0) };
+      recallChanged = true;
+    }
+    const repetitions = correct ? (previous?.repetitions ?? 0) + 1 : 0;
+    const intervalDays = correct
+      ? REVIEW_INTERVAL_DAYS[Math.min(repetitions - 1, REVIEW_INTERVAL_DAYS.length - 1)]
+      : 0;
+    wordReviews[key] = {
+      dueAt: correct ? now + intervalDays * DAY_MS : now + REVIEW_RETRY_MS,
+      intervalDays,
+      repetitions,
+      lastReviewedAt: now,
+    };
+  }
+  return { ...p, wordReviews, recall: recallChanged ? { ...p.recall, [courseId]: recall } : p.recall };
+}
+
+export function recordMission(p: Progress, missionId: string, accuracy: number): Progress {
+  const prev = p.missions[missionId];
+  return {
+    ...p,
+    missions: {
+      ...p.missions,
+      [missionId]: { times: (prev?.times ?? 0) + 1, bestAccuracy: Math.max(prev?.bestAccuracy ?? 0, accuracy) },
+    },
+  };
+}
+
+export function toggleSavedPhrase(p: Progress, phrase: PhraseDraft, now: number): Progress {
+  const id = wordReviewKey(phrase.courseId, phrase.target);
+  if (p.savedPhrases.some((saved) => saved.id === id)) {
+    return { ...p, savedPhrases: p.savedPhrases.filter((saved) => saved.id !== id) };
+  }
+  return { ...p, savedPhrases: [...p.savedPhrases, { ...phrase, id, createdAt: now }] };
+}
+
+export function removeSavedPhrase(p: Progress, id: string): Progress {
+  return { ...p, savedPhrases: p.savedPhrases.filter((phrase) => phrase.id !== id) };
 }
 
 /** Local calendar day as YYYY-MM-DD. */
@@ -118,7 +225,8 @@ export function recordSession(
   };
 }
 
-export function xpFor(s: { practice: boolean; mistakes: number }): number {
+export function xpFor(s: { practice: boolean; mistakes: number; missionId?: string }): number {
+  if (s.missionId) return 10 + (s.mistakes === 0 ? 5 : 0);
   if (s.practice) return 5;
   return 10 + (s.mistakes === 0 ? 5 : 0);
 }
