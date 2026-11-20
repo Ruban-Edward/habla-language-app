@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { findLesson, unitOf } from '../data/courses';
 import { checkExercise } from '../lib/check';
 import { sfx } from '../lib/sfx';
 import type { CheckResult, Course, Exercise, SessionResult } from '../types';
@@ -6,6 +7,7 @@ import { Choice } from './exercises/Choice';
 import { Match } from './exercises/Match';
 import { Tiles } from './exercises/Tiles';
 import { TypeAnswer } from './exercises/TypeAnswer';
+import { LessonPreview } from './LessonPreview';
 import { Mascot } from './Mascot';
 import { Modal } from './ui';
 
@@ -26,6 +28,8 @@ const PRAISE = ['Nice!', 'Great job!', 'Correct!', 'You got it!'];
 
 export function Lesson(props: Props) {
   const { course, exercises, lessonId, practice, hearts, sound, onWrong, onExit, onFinish, onOutOfHearts } = props;
+  const lesson = lessonId ? findLesson(course, lessonId) : undefined;
+  const [showPreview, setShowPreview] = useState(!practice && !!lesson?.words.length);
   const praise = [...PRAISE, ...course.praise];
   const [queue, setQueue] = useState(exercises);
   const [index, setIndex] = useState(0);
@@ -105,11 +109,12 @@ export function Lesson(props: Props) {
         <div
           className="progress"
           role="progressbar"
+          aria-label={showPreview ? 'Lesson introduction' : 'Lesson progress'}
           aria-valuemin={0}
           aria-valuemax={total}
-          aria-valuenow={correctCount}
+          aria-valuenow={showPreview ? 0 : correctCount}
         >
-          <span style={{ width: `${(100 * correctCount) / total}%` }} />
+          <span style={{ width: `${showPreview ? 0 : (100 * correctCount) / total}%` }} />
         </div>
         {practice ? (
           <span className="badge">Practice</span>
@@ -121,41 +126,55 @@ export function Lesson(props: Props) {
       </header>
 
       <main className="lesson-body">
-        {isRetry && <p className="retry-tag">↻ Let's try that again</p>}
-        <h2 className="instruction">{current.instruction}</h2>
-        {current.kind === 'choice' && <Choice key={current.key} exercise={current} {...exerciseProps} />}
-        {current.kind === 'tiles' && <Tiles key={current.key} exercise={current} {...exerciseProps} />}
-        {current.kind === 'type' && <TypeAnswer key={current.key} exercise={current} {...exerciseProps} />}
-        {current.kind === 'match' && <Match key={current.key} exercise={current} {...exerciseProps} />}
+        {showPreview && lesson ? (
+          <LessonPreview course={course} lesson={lesson} unit={unitOf(course, lesson.id)} />
+        ) : (
+          <>
+            {isRetry && <p className="retry-tag">↻ Let's try that again</p>}
+            <h2 className="instruction">{current.instruction}</h2>
+            {current.kind === 'choice' && <Choice key={current.key} exercise={current} {...exerciseProps} />}
+            {current.kind === 'tiles' && <Tiles key={current.key} exercise={current} {...exerciseProps} />}
+            {current.kind === 'type' && <TypeAnswer key={current.key} exercise={current} {...exerciseProps} />}
+            {current.kind === 'match' && <Match key={current.key} exercise={current} {...exerciseProps} />}
+          </>
+        )}
       </main>
 
-      <footer className={`lesson-foot ${result ? (result.correct ? 'is-correct' : 'is-wrong') : ''}`}>
+      <footer className={`lesson-foot ${showPreview ? '' : result ? (result.correct ? 'is-correct' : 'is-wrong') : ''}`}>
         <div className="foot-inner">
-          <div className="feedback" aria-live="polite">
-            {result && (
-              <>
-                <Mascot mood={result.correct ? 'cheer' : 'sad'} size={52} />
-                <div>
-                  <strong>{result.correct ? praise[index % praise.length] : 'Not quite'}</strong>
-                  {!result.correct && result.answer && (
-                    <p>
-                      Correct answer: <span className="answer-text">{result.answer}</span>
-                      {result.answerRoman && <span className="roman-inline"> ({result.answerRoman})</span>}
-                    </p>
-                  )}
-                  {result.note && <p>{result.note}</p>}
-                </div>
-              </>
-            )}
-          </div>
-          <button
-            type="button"
-            className={`btn ${result && !result.correct ? 'danger' : 'primary'}`}
-            disabled={!result && answer === null}
-            onClick={result ? next : check}
-          >
-            {result ? 'Continue' : 'Check'}
-          </button>
+          {showPreview ? (
+            <button type="button" className="btn primary" onClick={() => setShowPreview(false)}>
+              Start lesson <span aria-hidden="true">→</span>
+            </button>
+          ) : (
+            <>
+              <div className="feedback" aria-live="polite">
+                {result && (
+                  <>
+                    <Mascot mood={result.correct ? 'cheer' : 'sad'} size={52} />
+                    <div>
+                      <strong>{result.correct ? praise[index % praise.length] : 'Not quite'}</strong>
+                      {!result.correct && result.answer && (
+                        <p>
+                          Correct answer: <span className="answer-text">{result.answer}</span>
+                          {result.answerRoman && <span className="roman-inline"> ({result.answerRoman})</span>}
+                        </p>
+                      )}
+                      {result.note && <p>{result.note}</p>}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                className={`btn ${result && !result.correct ? 'danger' : 'primary'}`}
+                disabled={!result && answer === null}
+                onClick={result ? next : check}
+              >
+                {result ? 'Continue' : 'Check'}
+              </button>
+            </>
+          )}
         </div>
       </footer>
 

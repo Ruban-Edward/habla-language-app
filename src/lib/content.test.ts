@@ -5,6 +5,7 @@ import {
   isLevelComplete,
   isLevelUnlocked,
   isUnlocked,
+  LEARNING_LEVELS,
   lessonsOf,
   unitsInLevel,
 } from '../data/courses';
@@ -21,6 +22,21 @@ describe('courses', () => {
     const ids = COURSES.flatMap((c) => lessonsOf(c).map((l) => l.id));
     expect(new Set(ids).size).toBe(ids.length);
     for (const c of COURSES) for (const l of lessonsOf(c)) expect(l.id.startsWith(`${c.id}-`)).toBe(true);
+  });
+
+  it('offers matching beginner, intermediate and advanced paths in all three languages', () => {
+    const frenchShape = LEARNING_LEVELS.map((level) => {
+      const units = unitsInLevel(getCourse('fr'), level);
+      return [units.length, units.reduce((count, unit) => count + unit.lessons.length, 0)];
+    });
+
+    for (const course of COURSES) {
+      const shape = LEARNING_LEVELS.map((level) => {
+        const units = unitsInLevel(course, level);
+        return [units.length, units.reduce((count, unit) => count + unit.lessons.length, 0)];
+      });
+      expect(shape, course.name).toEqual(frenchShape);
+    }
   });
 
   for (const course of COURSES) {

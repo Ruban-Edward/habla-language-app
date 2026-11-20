@@ -21,12 +21,12 @@ export const LEVEL_INFO: Record<LearningLevel, { cefr: string; title: string; de
   beginner: {
     cefr: 'A1',
     title: 'Beginner',
-    description: 'Build your foundations for everyday French.',
+    description: 'Build your foundations for everyday conversation.',
   },
   intermediate: {
     cefr: 'A2–B1',
     title: 'Intermediate',
-    description: 'Use French with growing independence.',
+    description: 'Use the language with growing independence.',
   },
   advanced: {
     cefr: 'B2',

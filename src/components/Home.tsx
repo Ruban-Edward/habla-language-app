@@ -54,9 +54,7 @@ export function Home({ course, progress, todayXp, streak, onStart, onPractice, o
           <h1>{headline}</h1>
           <p className="home-subtitle">A thoughtful path from your first {greeting.toLowerCase()} to speaking with confidence.</p>
         </div>
-        <span className="level-chip"><span>{course.badge}</span> {course.id === 'fr'
-          ? `${LEVEL_INFO[currentLevel].cefr} · ${LEVEL_INFO[currentLevel].title.toUpperCase()}${allLevelsComplete ? ' COMPLETE' : ''}`
-          : 'STARTER PATH'}</span>
+        <span className="level-chip"><span>{course.badge}</span> {`${LEVEL_INFO[currentLevel].cefr} · ${LEVEL_INFO[currentLevel].title.toUpperCase()}${allLevelsComplete ? ' COMPLETE' : ''}`}</span>
       </div>
 
       <div className="home-grid">

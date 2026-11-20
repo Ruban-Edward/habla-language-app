@@ -6,7 +6,9 @@ French pronunciation is generated locally in the browser with the Piper SIWIS vo
 
 French voice attribution: [fr_FR-siwis-medium](https://huggingface.co/Trelis/piper-fr-fr-siwis-medium), trained on the [SIWIS French Speech Synthesis Database](https://datashare.is.ed.ac.uk/handle/10283/2353), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-The French path is organized into Beginner (A1), Intermediate (A2–B1), and Advanced (B2). Finish every lesson in a stage to unlock the next one.
+Spanish, French, and Hindi each offer a 24-lesson path organized into Beginner (A1), Intermediate (A2–B1), and Advanced (B2). Finish every lesson in a stage to unlock the next one. Hindi starts with Devanagari script lessons and shows romanization alongside vocabulary and example sentences.
+
+Every vocabulary lesson starts with a preview of its words, meanings, pronunciations, and example sentences before the exercises begin. Learners can replay any word or example as they study.
 
 ## Optional account and cloud progress setup
 
