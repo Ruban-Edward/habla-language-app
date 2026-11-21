@@ -1,54 +1,22 @@
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { frenchModelSizeMb, speak, type SpeechProgress, type SpeechResult } from '../lib/speech';
+import { dismissSpeechNotice, playSpeech, useSpeechNotice } from '../lib/speechStatus';
 import type { Course } from '../types';
 
-function speechFeedback(result: Exclude<SpeechResult, { ok: true }>, lang: string): string {
-  if (result.reason === 'unsupported') return 'Speech playback is not supported in this browser.';
-  if (result.reason === 'voice-missing') {
-    const language = lang.toLowerCase().startsWith('fr') ? 'French' : lang.toLowerCase().startsWith('es') ? 'Spanish' : 'target-language';
-    return `No ${language} voice is available. Install a ${language} text-to-speech voice in your device settings.`;
-  }
-  if (result.reason === 'model-load-failed') {
-    return `Couldn't load the built-in French voice. Check your connection and try again.${result.message ? ` (${result.message})` : ''}`;
-  }
-  if (result.reason === 'playback-failed' && result.message) {
-    return `Couldn't play the audio. ${result.message}`;
-  }
-  return "Couldn't play the audio. Check your device's media volume and try again.";
-}
+type PlaybackState = 'idle' | 'loading' | 'playing';
 
-function speechProgressMessage(progress: SpeechProgress | null): string {
-  if (progress?.phase === 'loading-model') {
-    return progress.percent === null
-      ? `Downloading the French voice model (about ${frenchModelSizeMb} MB on first use).`
-      : `Downloading the French voice model: ${progress.percent}% (about ${frenchModelSizeMb} MB).`;
-  }
-  if (progress?.phase === 'preparing-engine') return 'Preparing the French speech engine…';
-  if (progress?.phase === 'generating') return 'Generating French audio…';
-  return 'Playing pronunciation…';
-}
-
+/** Play one piece of text and track whether it is loading or playing, for the button's own look. */
 function useSpeechPlayback(text: string, lang: string) {
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState('');
-  const [progress, setProgress] = useState<SpeechProgress | null>(null);
-  const [warning, setWarning] = useState(false);
+  const [state, setState] = useState<PlaybackState>('idle');
   const play = async (slow = false) => {
-    setPending(true);
-    setMessage('');
-    setProgress(null);
-    setWarning(false);
-    const result = await speak(text, lang, { slow, onProgress: setProgress });
-    setPending(false);
-    setProgress(null);
-    if (!result.ok) setMessage(speechFeedback(result, lang));
-    else if (result.warning) {
-      setWarning(true);
-      setMessage(result.warning);
-    }
+    setState('loading');
+    await playSpeech(text, lang, {
+      slow,
+      onProgress: (progress) => setState(progress.phase === 'playing' ? 'playing' : 'loading'),
+    });
+    setState('idle');
   };
-  return { pending, message, progress, warning, play };
+  return { state, play };
 }
 
 export function formatDuration(ms: number): string {
@@ -95,36 +63,42 @@ export function CourseBadge({ course, size = 36 }: { course: Course; size?: numb
   );
 }
 
+function playbackLabel(state: PlaybackState, label: string): string {
+  if (state === 'loading') return 'Loading pronunciation';
+  if (state === 'playing') return 'Playing pronunciation';
+  return label;
+}
+
+/**
+ * A speaker button. Status and errors appear in the app-wide speech toast, never beside the button, so playing
+ * audio can't change the layout of the text around it.
+ */
 export function SpeakButton({ text, lang, label = 'Play audio' }: { text: string; lang: string; label?: string }) {
-  const { pending, message, progress, warning, play } = useSpeechPlayback(text, lang);
+  const { state, play } = useSpeechPlayback(text, lang);
   return (
-    <>
-      <button
-        type="button"
-        className="icon-btn speak-btn"
-        aria-label={pending ? 'Preparing pronunciation' : label}
-        aria-busy={pending || undefined}
-        disabled={pending}
-        onClick={() => void play()}
-      >
-        <SpeakerIcon />
-      </button>
-      {pending && lang.toLowerCase().startsWith('fr') && <span className="speech-status speech-progress" role="status">{speechProgressMessage(progress)}</span>}
-      {message && <span className={`speech-status${warning ? ' speech-warning' : ''}`} role="status">{message}</span>}
-    </>
+    <button
+      type="button"
+      className={`icon-btn speak-btn${state === 'idle' ? '' : ` is-${state}`}`}
+      aria-label={playbackLabel(state, label)}
+      aria-busy={state === 'loading' || undefined}
+      disabled={state !== 'idle'}
+      onClick={() => void play()}
+    >
+      <SpeakerIcon />
+    </button>
   );
 }
 
 export function AudioPrompt({ text, lang }: { text: string; lang: string }) {
-  const { pending, message, progress, warning, play } = useSpeechPlayback(text, lang);
+  const { state, play } = useSpeechPlayback(text, lang);
   return (
     <div className="audio-prompt">
       <button
         type="button"
-        className="audio-big"
-        aria-label={pending ? 'Preparing pronunciation' : 'Play audio'}
-        aria-busy={pending || undefined}
-        disabled={pending}
+        className={`audio-big${state === 'idle' ? '' : ` is-${state}`}`}
+        aria-label={playbackLabel(state, 'Play audio')}
+        aria-busy={state === 'loading' || undefined}
+        disabled={state !== 'idle'}
         onClick={() => void play()}
       >
         <SpeakerIcon size={40} />
@@ -133,13 +107,35 @@ export function AudioPrompt({ text, lang }: { text: string; lang: string }) {
         type="button"
         className="audio-slow"
         aria-label="Play slowly"
-        disabled={pending}
+        disabled={state !== 'idle'}
         onClick={() => void play(true)}
       >
         🐢
       </button>
-      {pending && lang.toLowerCase().startsWith('fr') && <span className="speech-status speech-progress" role="status">{speechProgressMessage(progress)}</span>}
-      {message && <span className={`speech-status${warning ? ' speech-warning' : ''}`} role="status">{message}</span>}
+    </div>
+  );
+}
+
+/** The app-wide speech notice: voice download progress, playback errors and warnings. */
+export function SpeechToast() {
+  const notice = useSpeechNotice();
+  return (
+    <div className="speech-toast-region" aria-live="polite">
+      {notice && (
+        <div className={`speech-toast is-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
+          <div className="speech-toast-copy">
+            <span>{notice.text}</span>
+            {notice.kind === 'progress' && (
+              <span className={`speech-toast-meter${notice.percent === null ? ' is-indeterminate' : ''}`} aria-hidden="true">
+                <span style={notice.percent === null ? undefined : { width: `${notice.percent}%` }} />
+              </span>
+            )}
+          </div>
+          {notice.kind !== 'progress' && (
+            <button type="button" className="speech-toast-close" aria-label="Dismiss" onClick={dismissSpeechNotice}>✕</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

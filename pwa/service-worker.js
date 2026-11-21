@@ -4,7 +4,7 @@
 const VERSION = '__HABLA_VERSION__';
 /** The app shell: everything needed to open the app and study lessons offline. */
 const PRECACHE = __HABLA_PRECACHE__;
-/** Code that is only downloaded on demand (the French speech engine); kept once fetched. */
+/** Code that is only downloaded on demand (the speech engine and phonemizers); kept once fetched. */
 const ON_DEMAND = __HABLA_ON_DEMAND__;
 
 const SHELL_CACHE = `habla-shell-${VERSION}`;
@@ -63,7 +63,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  // Other origins (Supabase, the French voice model) handle their own caching or need the network.
+  // Other origins (Supabase, the voice models) handle their own caching or need the network.
   if (url.origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
     event.respondWith(pageResponse(request));

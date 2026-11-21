@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { speak } from '../../lib/speech';
+import { playSpeech } from '../../lib/speechStatus';
 import type { TypeExercise } from '../../types';
 import { Prompt } from './Prompt';
 import { langOf, type ExerciseProps } from './types';
@@ -10,7 +10,7 @@ export function TypeAnswer({ exercise, course, disabled, sound, onAnswer }: Exer
   const answerInTarget = exercise.answerSide === 't';
 
   useEffect(() => {
-    if (sound && exercise.promptSide === 't') speak(exercise.prompt, course.lang);
+    if (sound && exercise.promptSide === 't') void playSpeech(exercise.prompt, course.lang);
   }, [exercise.prompt, exercise.promptSide, course.lang, sound]);
 
   useEffect(() => {

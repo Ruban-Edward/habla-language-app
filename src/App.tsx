@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AccountPanel } from './components/AccountPanel';
 import { Complete } from './components/Complete';
@@ -8,6 +8,7 @@ import { Lesson } from './components/Lesson';
 import { MissionScreen } from './components/MissionScreen';
 import { OutOfHearts } from './components/OutOfHearts';
 import { TopBar } from './components/TopBar';
+import { SpeechToast } from './components/ui';
 import { findLesson, findMission, getCourse, lessonsOf } from './data/courses';
 import { generateLesson, generatePractice, generateReview } from './lib/generate';
 import {
@@ -43,8 +44,13 @@ import { useOnline } from './lib/offline';
 import { hasVoice } from './lib/speech';
 import type { Exercise, SessionResult } from './types';
 
+const TranslateScreen = lazy(() =>
+  import('./components/TranslateScreen').then((module) => ({ default: module.TranslateScreen })),
+);
+
 type Screen =
   | { name: 'home' }
+  | { name: 'translate' }
   | { name: 'courses' }
   | { name: 'lesson'; run: number; lessonId?: string; practice: boolean; exercises: Exercise[] }
   | { name: 'mission'; run: number; missionId: string }
@@ -379,6 +385,7 @@ export default function App() {
             practicedToday={progress.lastActiveDate === dayKey(now)}
             now={now}
             onSwitchCourse={() => setScreen({ name: 'courses' })}
+            onTranslate={() => setScreen({ name: 'translate' })}
             onToggleSound={() => setProgress((p) => ({ ...p, sound: !p.sound }))}
             onAccount={() => setShowAccount(true)}
             accountLabel={session ? 'Account' : 'Sign in'}
@@ -403,6 +410,19 @@ export default function App() {
             onReset={() => setProgress({ ...initialProgress(Date.now()), course: progress.course, resetAt: Date.now() })}
           />
         </>
+      )}
+
+      {screen.name === 'translate' && (
+        <Suspense fallback={<main className="account-loading" role="status">Loading translator…</main>}>
+          <TranslateScreen
+            course={course}
+            online={online}
+            sound={progress.sound}
+            savedPhrases={progress.savedPhrases}
+            onBack={() => setScreen({ name: 'home' })}
+            onSavePhrase={togglePhrase}
+          />
+        </Suspense>
       )}
 
       {screen.name === 'lesson' && (
@@ -474,6 +494,7 @@ export default function App() {
           onRetrySync={() => setRetrySync((retry) => retry + 1)}
         />
       )}
+      <SpeechToast />
     </div>
   );
 }

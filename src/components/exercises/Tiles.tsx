@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { speak } from '../../lib/speech';
+import { playSpeech } from '../../lib/speechStatus';
 import type { TilesExercise } from '../../types';
 import { AudioPrompt } from '../ui';
 import { Prompt } from './Prompt';
@@ -12,8 +12,8 @@ export function Tiles({ exercise, course, disabled, sound, onAnswer }: ExerciseP
 
   useEffect(() => {
     if (!sound) return;
-    if (exercise.audio) speak(exercise.audio, course.lang);
-    else if (exercise.promptSide === 't' && exercise.prompt) speak(exercise.prompt, course.lang);
+    if (exercise.audio) void playSpeech(exercise.audio, course.lang);
+    else if (exercise.promptSide === 't' && exercise.prompt) void playSpeech(exercise.prompt, course.lang);
   }, [exercise.audio, exercise.prompt, exercise.promptSide, course.lang, sound]);
 
   const update = (next: number[]) => {

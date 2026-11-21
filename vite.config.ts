@@ -13,8 +13,8 @@ function publicFiles(dir: string, root = dir): string[] {
 }
 
 /**
- * Emit `sw.js` with the list of built files. The app shell is cached on install; the French speech engine
- * (dynamically imported chunks and WebAssembly) is only cached once a learner downloads it.
+ * Emit `sw.js` with the list of built files. The app shell is cached on install; the speech engine and
+ * phonemizers (dynamically imported chunks and WebAssembly) are only cached once a learner downloads a voice.
  */
 function hablaServiceWorker(): Plugin {
   return {
@@ -25,7 +25,8 @@ function hablaServiceWorker(): Plugin {
       const onDemand: string[] = [];
       for (const file of Object.values(bundle)) {
         if (file.fileName.endsWith('.map') || file.fileName === 'index.html') continue;
-        const lazy = file.fileName.endsWith('.wasm') || (file.type === 'chunk' && file.isDynamicEntry && !file.isEntry);
+        const offlineRoute = file.type === 'chunk' && file.fileName.startsWith('assets/TranslateScreen-');
+        const lazy = file.fileName.endsWith('.wasm') || (file.type === 'chunk' && file.isDynamicEntry && !file.isEntry && !offlineRoute);
         (lazy ? onDemand : precache).push(file.fileName);
       }
       const version = createHash('sha256').update(JSON.stringify([precache, onDemand])).digest('hex').slice(0, 12);

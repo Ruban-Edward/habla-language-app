@@ -10,20 +10,21 @@ import {
   type AppOfflineStatus,
 } from '../lib/offline';
 import {
+  builtInVoiceLanguage,
+  builtInVoiceSizeMb,
+  builtInVoiceStatus,
   deviceVoiceStatus,
-  downloadFrenchVoice,
-  frenchModelSizeMb,
-  frenchVoiceStatus,
+  downloadBuiltInVoice,
   onVoicesChanged,
-  removeFrenchVoice,
+  removeBuiltInVoice,
+  SPEECH_ENGINE_MB,
+  type BuiltInVoiceStatus,
   type DeviceVoiceStatus,
-  type FrenchVoiceStatus,
   type SpeechProgress,
+  type VoiceLanguage,
 } from '../lib/speech';
+import type { Course } from '../types';
 import { CourseBadge, Modal } from './ui';
-
-/** The speech engine (WebAssembly runtime) downloaded alongside the French voice model, in MB uncompressed. */
-const FRENCH_ENGINE_MB = 15;
 
 /** Home-screen card that opens the offline panel. */
 export function OfflineCard() {
@@ -81,23 +82,84 @@ function progressText(progress: SpeechProgress | null): string {
   return 'Preparing the speech engine…';
 }
 
+const BUILT_IN_LANGUAGES: VoiceLanguage[] = ['fr', 'es', 'hi'];
+
+/** One language's built-in voice: its status, with download and remove buttons. */
+function BuiltInVoiceRow({ course, language, online }: { course: Course; language: VoiceLanguage; online: boolean }) {
+  const [status, setStatus] = useState<BuiltInVoiceStatus | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState<SpeechProgress | null>(null);
+  const [message, setMessage] = useState('');
+  const size = builtInVoiceSizeMb(language);
+
+  useEffect(() => {
+    let active = true;
+    const check = () => void builtInVoiceStatus(language).then((next) => active && setStatus(next));
+    check();
+    const timer = window.setInterval(check, 3000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [language]);
+
+  const download = async () => {
+    setDownloading(true);
+    setMessage('');
+    setProgress(null);
+    void requestPersistentStorage();
+    const result = await downloadBuiltInVoice(language, setProgress);
+    setDownloading(false);
+    if (!result.ok) setMessage(`The download didn’t finish: ${result.message}`);
+    else if (result.warning) setMessage(result.warning);
+    setStatus(await builtInVoiceStatus(language));
+  };
+
+  const remove = async () => {
+    await removeBuiltInVoice(language);
+    setMessage(`Removed. The voice will download again the next time you play ${course.name} audio.`);
+    setStatus(await builtInVoiceStatus(language));
+  };
+
+  const ready = status === 'downloaded';
+  return (
+    <li className="offline-voice">
+      <CourseBadge course={course} size={34} />
+      <div className="offline-voice-copy">
+        <strong>{course.name}</strong>
+        <span className={`offline-pill ${ready ? 'is-ok' : ''}`}>
+          {status === null ? 'Checking…' : ready ? 'Downloaded · works offline' : status === 'unavailable' ? 'Not available in this browser' : 'Download needed'}
+        </span>
+        <p>
+          About {size} MB. It downloads the first time you play {course.name} audio; download it now to have it offline.
+        </p>
+        {downloading && <p className="offline-progress" role="status">{progressText(progress)}</p>}
+        {message && <p className="offline-message" role="status">{message}</p>}
+      </div>
+      <div className="offline-voice-action">
+        {status === 'missing' && (
+          <button type="button" className="btn primary" disabled={downloading || !online} onClick={() => void download()}>
+            {downloading ? 'Downloading…' : online ? `Download (~${size} MB)` : 'Connect to download'}
+          </button>
+        )}
+        {ready && (
+          <button type="button" className="btn ghost" onClick={() => void remove()}>Remove</button>
+        )}
+      </div>
+    </li>
+  );
+}
+
 export function OfflinePanel({ onClose }: { onClose: () => void }) {
   const online = useOnline();
   const { canInstall, install } = useInstallPrompt();
   const [appStatus, setAppStatus] = useState<AppOfflineStatus | null>(null);
-  const [french, setFrench] = useState<FrenchVoiceStatus | null>(null);
-  const [downloading, setDownloading] = useState(false);
-  const [progress, setProgress] = useState<SpeechProgress | null>(null);
-  const [frenchMessage, setFrenchMessage] = useState('');
   const [, setVoicesVersion] = useState(0);
   const standalone = isStandalone();
 
   useEffect(() => {
     let active = true;
-    const check = () => {
-      void appOfflineStatus().then((status) => active && setAppStatus(status));
-      void frenchVoiceStatus().then((status) => active && setFrench(status));
-    };
+    const check = () => void appOfflineStatus().then((status) => active && setAppStatus(status));
     check();
     const timer = window.setInterval(check, 3000);
     const stopVoices = onVoicesChanged(() => setVoicesVersion((v) => v + 1));
@@ -107,24 +169,6 @@ export function OfflinePanel({ onClose }: { onClose: () => void }) {
       stopVoices();
     };
   }, []);
-
-  const downloadFrench = async () => {
-    setDownloading(true);
-    setFrenchMessage('');
-    setProgress(null);
-    void requestPersistentStorage();
-    const result = await downloadFrenchVoice(setProgress);
-    setDownloading(false);
-    if (!result.ok) setFrenchMessage(`The download didn’t finish: ${result.message}`);
-    else if (result.warning) setFrenchMessage(result.warning);
-    setFrench(await frenchVoiceStatus());
-  };
-
-  const removeFrench = async () => {
-    await removeFrenchVoice();
-    setFrenchMessage('Removed. The voice will download again the next time you play French audio.');
-    setFrench(await frenchVoiceStatus());
-  };
 
   const app = appStatusText(appStatus);
 
@@ -168,37 +212,16 @@ export function OfflinePanel({ onClose }: { onClose: () => void }) {
 
         <section className="offline-section">
           <h3>Pronunciation audio</h3>
-          <p className="offline-intro">Lesson text is always offline once the app is stored. Audio depends on the language:</p>
+          <p className="offline-intro">
+            Lesson text is always offline once the app is stored. Pronunciation comes from built-in voices that run on your
+            device, so nothing you study is sent to a speech service. The speech engine they share adds up to {SPEECH_ENGINE_MB} MB
+            to the first download.
+          </p>
           <ul className="offline-voices">
             {COURSES.map((course) => {
-              if (course.lang.toLowerCase().startsWith('fr')) {
-                const ready = french === 'downloaded';
-                return (
-                  <li key={course.id} className="offline-voice">
-                    <CourseBadge course={course} size={34} />
-                    <div className="offline-voice-copy">
-                      <strong>{course.name}</strong>
-                      <span className={`offline-pill ${ready ? 'is-ok' : ''}`}>
-                        {french === null ? 'Checking…' : ready ? 'Downloaded · works offline' : french === 'unavailable' ? 'Not available in this browser' : 'Download needed'}
-                      </span>
-                      <p>
-                        A built-in voice that runs on your device: about {frenchModelSizeMb} MB for the voice plus up to {FRENCH_ENGINE_MB} MB for the speech engine. Download it before you travel; nothing you study is sent to a speech service.
-                      </p>
-                      {downloading && <p className="offline-progress" role="status">{progressText(progress)}</p>}
-                      {frenchMessage && <p className="offline-message" role="status">{frenchMessage}</p>}
-                    </div>
-                    <div className="offline-voice-action">
-                      {french === 'missing' && (
-                        <button type="button" className="btn primary" disabled={downloading || !online} onClick={() => void downloadFrench()}>
-                          {downloading ? 'Downloading…' : online ? `Download (~${frenchModelSizeMb + FRENCH_ENGINE_MB} MB)` : 'Connect to download'}
-                        </button>
-                      )}
-                      {ready && (
-                        <button type="button" className="btn ghost" onClick={() => void removeFrench()}>Remove</button>
-                      )}
-                    </div>
-                  </li>
-                );
+              const language = builtInVoiceLanguage(course.lang);
+              if (language && BUILT_IN_LANGUAGES.includes(language)) {
+                return <BuiltInVoiceRow key={course.id} course={course} language={language} online={online} />;
               }
               const voice = voiceText(deviceVoiceStatus(course.lang), course.name);
               return (

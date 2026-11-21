@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { checkText } from '../lib/answer';
 import type { PhraseDraft, SavedPhrase } from '../lib/progress';
 import { sfx } from '../lib/sfx';
-import { speak } from '../lib/speech';
+import { playSpeech } from '../lib/speechStatus';
 import type { Course, Mission, MissionLine, MissionReply, SessionResult } from '../types';
 import { Mascot } from './Mascot';
 import { ReportProblem } from './ReportProblem';
@@ -45,7 +45,7 @@ export function MissionScreen(props: Props) {
   const canType = course.typeInTarget;
 
   useEffect(() => {
-    if (sound && !done) void speak(turn.partner.t, course.lang);
+    if (sound && !done) void playSpeech(turn.partner.t, course.lang);
   }, [course.lang, done, sound, turn.partner.t]);
 
   useEffect(() => {

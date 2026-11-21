@@ -11,43 +11,119 @@ export type SpeechProgress =
   | { phase: 'generating' }
   | { phase: 'playing' };
 
+/* ---------- Built-in voices ---------- */
+
+/** Languages with a built-in voice that runs on the device (Piper text-to-speech models). */
+export type VoiceLanguage = 'fr' | 'es' | 'hi';
+
 type PiperVoiceConfig = {
   audio: { sample_rate: number };
   inference: { noise_scale: number; length_scale: number; noise_w: number };
   phoneme_id_map: Record<string, number[]>;
+  vowel_clusters?: string[][];
 };
 
-type FrenchRuntime = {
+/** Text → phoneme id sequences (one per sentence), plus any symbols the model has no id for. */
+type Encode = (text: string) => { sentences: number[][]; dropped: string[] };
+
+type VoiceRuntime = {
   session: Awaited<ReturnType<typeof import('onnxruntime-web').InferenceSession.create>>;
   config: PiperVoiceConfig;
-  phonemizer: InstanceType<typeof import('@piper-plus/g2p/fr').FrenchG2P>;
-  encoder: InstanceType<typeof import('@piper-plus/g2p/encode').Encoder>;
+  encode: Encode;
   cacheWarning: string | null;
 };
 
-const frenchVoiceFiles =
-  'https://huggingface.co/Trelis/piper-fr-fr-siwis-medium/resolve/83e01e593f3fd17077ef19b4867ace9075874915';
-const frenchModelUrl = `${frenchVoiceFiles}/model.onnx`;
-const frenchConfigUrl = `${frenchVoiceFiles}/model.onnx.json`;
-const frenchModelCache = 'habla-french-voice-v1';
-const frenchVoiceModelSizeBytes = 63_201_294;
-export const frenchModelSizeMb = Math.round(frenchVoiceModelSizeBytes / 1_000_000);
-let frenchRuntimePromise: Promise<FrenchRuntime> | null = null;
-let audioContext: AudioContext | null = null;
-let activeFrenchSource: AudioBufferSourceNode | null = null;
-
-type FrenchCacheState = { cache: Cache | null; warning: string | null };
-type ModelAssetCache = { bytes: ArrayBuffer; warning: string | null };
-const frenchNasalVowelAliases: Record<string, string> = {
-  'ɛ̃': '\uE056',
-  'ɑ̃': '\uE057',
-  'ɔ̃': '\uE058',
-  'œ̃': '\uE063',
+type VoiceSpec = {
+  /** Language name shown to learners. */
+  name: string;
+  modelUrl: string;
+  configUrl: string;
+  /** Exact model size, used to detect incomplete downloads. */
+  sizeBytes: number;
+  cacheName: string;
+  /** Load the phonemizer for this voice and return its encoder. */
+  createEncoder: (config: PiperVoiceConfig) => Promise<Encode>;
 };
 
-function isFrench(lang: string): boolean {
-  return lang.toLowerCase().startsWith('fr');
+const PIPER_VOICES = 'https://huggingface.co/rhasspy/piper-voices/resolve/42301ec547bc2939386cf0ae9f9050ca05b1d3af';
+const FRENCH_VOICE = 'https://huggingface.co/Trelis/piper-fr-fr-siwis-medium/resolve/83e01e593f3fd17077ef19b4867ace9075874915';
+
+const VOICES: Record<VoiceLanguage, VoiceSpec> = {
+  fr: {
+    name: 'French',
+    modelUrl: `${FRENCH_VOICE}/model.onnx`,
+    configUrl: `${FRENCH_VOICE}/model.onnx.json`,
+    sizeBytes: 63_201_294,
+    cacheName: 'habla-french-voice-v1',
+    createEncoder: async (config) => {
+      const [{ FrenchG2P }, { Encoder }] = await Promise.all([import('@piper-plus/g2p/fr'), import('@piper-plus/g2p/encode')]);
+      addFrenchNasalVowelAliases(config.phoneme_id_map);
+      const phonemizer = new FrenchG2P();
+      const encoder = new Encoder(config.phoneme_id_map);
+      return (text) => {
+        const { phonemeIds, droppedSymbols } = encoder.encode(phonemizer.phonemize(text).tokens);
+        return { sentences: [phonemeIds], dropped: droppedSymbols };
+      };
+    },
+  },
+  es: {
+    name: 'Spanish',
+    modelUrl: `${PIPER_VOICES}/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx`,
+    configUrl: `${PIPER_VOICES}/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json`,
+    sizeBytes: 63_221_984,
+    cacheName: 'habla-voice-es-v1',
+    createEncoder: async (config) => {
+      const { phonemizeSpanish } = await import('./g2p/spanish');
+      return (text) => encodeSentences(phonemizeSpanish(text), config);
+    },
+  },
+  hi: {
+    name: 'Hindi',
+    modelUrl: `${PIPER_VOICES}/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx`,
+    configUrl: `${PIPER_VOICES}/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx.json`,
+    sizeBytes: 62_950_044,
+    cacheName: 'habla-voice-hi-v1',
+    createEncoder: async (config) => {
+      const { phonemizeHindi } = await import('./g2p/hindi');
+      return (text) => encodeSentences(phonemizeHindi(text), config);
+    },
+  },
+};
+
+/** Language name of a built-in voice, for messages. */
+export function builtInVoiceName(language: VoiceLanguage): string {
+  return VOICES[language].name;
 }
+
+/** Approximate download size of each built-in voice, in MB. */
+export function builtInVoiceSizeMb(language: VoiceLanguage): number {
+  return Math.round(VOICES[language].sizeBytes / 1_000_000);
+}
+
+/** The speech engine (WebAssembly runtime) shared by all built-in voices, in MB uncompressed. */
+export const SPEECH_ENGINE_MB = 15;
+
+/** The built-in voice for a BCP-47 tag such as `es-ES`, if there is one. */
+export function builtInVoiceLanguage(lang: string): VoiceLanguage | null {
+  const prefix = lang.toLowerCase().split(/[-_]/)[0];
+  return prefix === 'fr' || prefix === 'es' || prefix === 'hi' ? prefix : null;
+}
+
+const runtimes = new Map<VoiceLanguage, Promise<VoiceRuntime>>();
+/** Everyone waiting for a voice to load hears its progress, not only the first caller. */
+const loadListeners = new Map<VoiceLanguage, Set<(progress: SpeechProgress) => void>>();
+let audioContext: AudioContext | null = null;
+let activeSource: AudioBufferSourceNode | null = null;
+/** Silence between sentences, in seconds. */
+const SENTENCE_GAP = 0.18;
+
+type CacheState = { cache: Cache | null; warning: string | null };
+const frenchNasalVowelAliases: Record<string, string> = {
+  'ɛ̃': '',
+  'ɑ̃': '',
+  'ɔ̃': '',
+  'œ̃': '',
+};
 
 function hasAudioContext(): boolean {
   return typeof window !== 'undefined' && 'AudioContext' in window;
@@ -104,60 +180,102 @@ export function addFrenchNasalVowelAliases(
   }
 }
 
-function cacheUnavailableMessage(): string {
-  return 'Browser storage is unavailable or full. French speech works for this session, but the model may need to download again next time.';
+/**
+ * eSpeak-style phonemes → Piper ids, exactly as Piper prepares them for its eSpeak voices: the string is split into
+ * Unicode codepoints (NFD, so ĩ is i + combining tilde), vowel clusters the model learned as one symbol (such as aɪ)
+ * are merged, and each id is followed by the padding id between `^` and `$`.
+ */
+export function encodeEspeakPhonemes(
+  phonemes: string,
+  config: Pick<PiperVoiceConfig, 'phoneme_id_map' | 'vowel_clusters'>,
+): { ids: number[]; dropped: string[] } {
+  const map = config.phoneme_id_map;
+  const symbols = [...phonemes.normalize('NFD')];
+  const clusters = (config.vowel_clusters ?? []).map((cluster) => cluster.join('')).filter((cluster) => map[cluster]);
+  const merged: string[] = [];
+  for (let i = 0; i < symbols.length; i++) {
+    const pair = symbols[i] + (symbols[i + 1] ?? '');
+    if (symbols[i + 1] && clusters.includes(pair)) {
+      merged.push(pair);
+      i++;
+    } else merged.push(symbols[i]);
+  }
+
+  const pad = map._ ?? [];
+  const ids = [...(map['^'] ?? []), ...pad];
+  const dropped = new Set<string>();
+  for (const symbol of merged) {
+    const symbolIds = map[symbol];
+    if (!symbolIds) {
+      dropped.add(symbol);
+      continue;
+    }
+    ids.push(...symbolIds, ...pad);
+  }
+  ids.push(...(map.$ ?? []));
+  return { ids, dropped: [...dropped] };
 }
 
-async function openFrenchModelCache(): Promise<FrenchCacheState> {
-  if (!('caches' in window)) return { cache: null, warning: cacheUnavailableMessage() };
+function encodeSentences(sentences: string[], config: PiperVoiceConfig): { sentences: number[][]; dropped: string[] } {
+  const dropped = new Set<string>();
+  const encoded = sentences.map((sentence) => {
+    const result = encodeEspeakPhonemes(sentence, config);
+    result.dropped.forEach((symbol) => dropped.add(symbol));
+    return result.ids;
+  });
+  // A sentence of only BOS, PAD and EOS has nothing to say.
+  return { sentences: encoded.filter((ids) => ids.length > 3), dropped: [...dropped] };
+}
+
+function cacheUnavailableMessage(spec: VoiceSpec): string {
+  return `Browser storage is unavailable or full. ${spec.name} speech works for this session, but the voice may need to download again next time.`;
+}
+
+async function openModelCache(spec: VoiceSpec): Promise<CacheState> {
+  if (!('caches' in window)) return { cache: null, warning: cacheUnavailableMessage(spec) };
   try {
-    return { cache: await window.caches.open(frenchModelCache), warning: null };
+    return { cache: await window.caches.open(spec.cacheName), warning: null };
   } catch (error) {
-    console.warn('Could not open browser storage for the French voice model.', error);
-    return { cache: null, warning: cacheUnavailableMessage() };
+    console.warn(`Could not open browser storage for the ${spec.name} voice.`, error);
+    return { cache: null, warning: cacheUnavailableMessage(spec) };
   }
 }
 
-async function cacheResponse(
-  cacheState: FrenchCacheState,
-  url: string,
-  response: Response,
-): Promise<void> {
+async function cacheResponse(spec: VoiceSpec, cacheState: CacheState, url: string, response: Response): Promise<void> {
   if (!cacheState.cache) return;
   try {
     await cacheState.cache.put(url, response);
   } catch (error) {
-    console.warn('Could not cache a French voice asset in browser storage.', error);
-    cacheState.warning = cacheUnavailableMessage();
+    console.warn(`Could not store the ${spec.name} voice in browser storage.`, error);
+    cacheState.warning = cacheUnavailableMessage(spec);
   }
 }
 
-async function fetchFrenchConfig(cacheState: FrenchCacheState): Promise<PiperVoiceConfig> {
+async function fetchConfig(spec: VoiceSpec, cacheState: CacheState): Promise<PiperVoiceConfig> {
   let response: Response | undefined;
   try {
-    response = await cacheState.cache?.match(frenchConfigUrl);
+    response = await cacheState.cache?.match(spec.configUrl);
   } catch (error) {
-    console.warn('Could not read the French voice configuration from browser storage.', error);
-    cacheState.warning = cacheUnavailableMessage();
+    console.warn(`Could not read the ${spec.name} voice settings from browser storage.`, error);
+    cacheState.warning = cacheUnavailableMessage(spec);
   }
   if (!response) {
-    response = await fetch(frenchConfigUrl);
-    if (!response.ok) {
-      throw new Error(`French voice configuration download failed (${response.status}).`);
-    }
-    await cacheResponse(cacheState, frenchConfigUrl, response.clone());
+    response = await fetch(spec.configUrl);
+    if (!response.ok) throw new Error(`${spec.name} voice settings download failed (${response.status}).`);
+    await cacheResponse(spec, cacheState, spec.configUrl, response.clone());
   }
 
   const value: unknown = await response.json();
-  if (!isPiperVoiceConfig(value)) throw new Error('French voice configuration has an unsupported format.');
+  if (!isPiperVoiceConfig(value)) throw new Error(`${spec.name} voice settings have an unsupported format.`);
   return value;
 }
 
 async function readModelWithProgress(
+  spec: VoiceSpec,
   response: Response,
   onProgress: (progress: SpeechProgress) => void,
 ): Promise<ArrayBuffer> {
-  const total = Number(response.headers.get('content-length')) || null;
+  const total = Number(response.headers.get('content-length')) || spec.sizeBytes;
   if (!response.body) {
     const buffer = await response.arrayBuffer();
     onProgress({ phase: 'loading-model', percent: 100 });
@@ -167,15 +285,17 @@ async function readModelWithProgress(
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let loaded = 0;
+  let lastPercent = -1;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);
     loaded += value.byteLength;
-    onProgress({
-      phase: 'loading-model',
-      percent: total ? Math.min(100, Math.round((loaded / total) * 100)) : null,
-    });
+    const percent = Math.min(100, Math.round((loaded / total) * 100));
+    if (percent !== lastPercent) {
+      lastPercent = percent;
+      onProgress({ phase: 'loading-model', percent });
+    }
   }
 
   const bytes = new Uint8Array(loaded);
@@ -184,90 +304,98 @@ async function readModelWithProgress(
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  if (bytes.byteLength === 0) throw new Error('French voice model download was empty.');
+  if (bytes.byteLength === 0) throw new Error(`${spec.name} voice download was empty.`);
   return bytes.buffer;
 }
 
-async function fetchFrenchModel(
-  cacheState: FrenchCacheState,
+async function fetchModel(
+  spec: VoiceSpec,
+  cacheState: CacheState,
   onProgress: (progress: SpeechProgress) => void,
-): Promise<ModelAssetCache> {
+): Promise<ArrayBuffer> {
   let cached: Response | undefined;
   try {
-    cached = await cacheState.cache?.match(frenchModelUrl);
+    cached = await cacheState.cache?.match(spec.modelUrl);
   } catch (error) {
-    console.warn('Could not read the French voice model from browser storage.', error);
-    cacheState.warning = cacheUnavailableMessage();
+    console.warn(`Could not read the ${spec.name} voice from browser storage.`, error);
+    cacheState.warning = cacheUnavailableMessage(spec);
   }
   if (cached) {
     const cachedBytes = await cached.arrayBuffer();
-    if (cachedBytes.byteLength === frenchVoiceModelSizeBytes) {
+    if (cachedBytes.byteLength === spec.sizeBytes) {
       onProgress({ phase: 'loading-model', percent: 100 });
-      return { bytes: cachedBytes, warning: null };
+      return cachedBytes;
     }
 
-    console.warn('Cached French voice model is incomplete; downloading a fresh copy.');
+    console.warn(`The stored ${spec.name} voice is incomplete; downloading a fresh copy.`);
     try {
-      await cacheState.cache?.delete(frenchModelUrl);
+      await cacheState.cache?.delete(spec.modelUrl);
     } catch (error) {
-      console.warn('Could not remove the incomplete French voice model from browser storage.', error);
+      console.warn(`Could not remove the incomplete ${spec.name} voice from browser storage.`, error);
     }
   }
 
-  const response = await fetch(frenchModelUrl);
-  if (!response.ok) throw new Error(`French voice model download failed (${response.status}).`);
+  const response = await fetch(spec.modelUrl);
+  if (!response.ok) throw new Error(`${spec.name} voice download failed (${response.status}).`);
 
-  const cacheWrite = cacheResponse(cacheState, frenchModelUrl, response.clone());
-  const bytes = await readModelWithProgress(response, onProgress);
-  if (bytes.byteLength !== frenchVoiceModelSizeBytes) {
-    throw new Error(`French voice model download was incomplete (${bytes.byteLength} bytes).`);
+  const cacheWrite = cacheResponse(spec, cacheState, spec.modelUrl, response.clone());
+  const bytes = await readModelWithProgress(spec, response, onProgress);
+  if (bytes.byteLength !== spec.sizeBytes) {
+    throw new Error(`${spec.name} voice download was incomplete (${bytes.byteLength} bytes).`);
   }
   await cacheWrite;
-  return { bytes, warning: cacheState.warning };
+  return bytes;
 }
 
-async function loadFrenchRuntime(onProgress: (progress: SpeechProgress) => void): Promise<FrenchRuntime> {
+async function loadRuntime(language: VoiceLanguage, onProgress: (progress: SpeechProgress) => void): Promise<VoiceRuntime> {
+  const spec = VOICES[language];
   onProgress({ phase: 'loading-model', percent: 0 });
-  const cacheState = await openFrenchModelCache();
-  const config = await fetchFrenchConfig(cacheState);
-  const model = await fetchFrenchModel(cacheState, onProgress);
+  const cacheState = await openModelCache(spec);
+  const config = await fetchConfig(spec, cacheState);
+  const model = await fetchModel(spec, cacheState, onProgress);
   onProgress({ phase: 'preparing-engine' });
 
-  const [{ FrenchG2P }, { Encoder }, ort, wasmUrl] = await Promise.all([
-    import('@piper-plus/g2p/fr'),
-    import('@piper-plus/g2p/encode'),
+  const [ort, wasmUrl, encode] = await Promise.all([
     import('onnxruntime-web/wasm'),
     import('onnxruntime-web/ort-wasm-simd-threaded.wasm?url'),
+    spec.createEncoder(config),
   ]);
   ort.env.wasm.wasmPaths = { wasm: wasmUrl.default };
   ort.env.wasm.numThreads = 1;
-  addFrenchNasalVowelAliases(config.phoneme_id_map);
-  const phonemizer = new FrenchG2P();
-  const encoder = new Encoder(config.phoneme_id_map);
-  const session = await ort.InferenceSession.create(model.bytes, { executionProviders: ['wasm'] });
+  const session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] });
   const requiredInputs = ['input', 'input_lengths', 'scales'];
   if (requiredInputs.some((input) => !session.inputNames.includes(input)) || !session.outputNames[0]) {
     await session.release();
-    throw new Error('The downloaded French voice model has an unsupported ONNX format.');
+    throw new Error(`The downloaded ${spec.name} voice has an unsupported format.`);
   }
 
-  return {
-    session,
-    config,
-    phonemizer,
-    encoder,
-    cacheWarning: model.warning ?? cacheState.warning,
-  };
+  return { session, config, encode, cacheWarning: cacheState.warning };
 }
 
-function getFrenchRuntime(onProgress: (progress: SpeechProgress) => void): Promise<FrenchRuntime> {
-  if (!frenchRuntimePromise) {
-    frenchRuntimePromise = loadFrenchRuntime(onProgress).catch((error: unknown) => {
-      frenchRuntimePromise = null;
-      throw error;
-    });
+/** Load a voice once and share it; other languages' voices are released to keep memory low on phones. */
+function getRuntime(language: VoiceLanguage, onProgress: (progress: SpeechProgress) => void): Promise<VoiceRuntime> {
+  let runtime = runtimes.get(language);
+  const listeners = loadListeners.get(language) ?? new Set();
+  loadListeners.set(language, listeners);
+  listeners.add(onProgress);
+  if (!runtime) {
+    const broadcast = (progress: SpeechProgress) => loadListeners.get(language)?.forEach((listener) => listener(progress));
+    runtime = loadRuntime(language, broadcast)
+      .catch((error: unknown) => {
+        runtimes.delete(language);
+        throw error;
+      })
+      .finally(() => loadListeners.delete(language));
+    runtimes.set(language, runtime);
+    void runtime.then(() => {
+      for (const [other, pending] of runtimes) {
+        if (other === language) continue;
+        runtimes.delete(other);
+        void pending.then((loaded) => loaded.session.release()).catch(() => undefined);
+      }
+    }, () => undefined);
   }
-  return frenchRuntimePromise;
+  return runtime.finally(() => loadListeners.get(language)?.delete(onProgress));
 }
 
 function getAudioContext(): AudioContext {
@@ -275,86 +403,110 @@ function getAudioContext(): AudioContext {
   return audioContext;
 }
 
-async function speakFrench(
+/** Stop any built-in voice or device voice that is playing. */
+export function stopSpeech(): void {
+  if (activeSource) {
+    const source = activeSource;
+    activeSource = null;
+    try {
+      source.stop();
+    } catch {
+      // Already stopped.
+    }
+  }
+  if (speechSupported) window.speechSynthesis.cancel();
+}
+
+async function speakBuiltIn(
+  language: VoiceLanguage,
   text: string,
-  opts: { slow?: boolean; onProgress?: (progress: SpeechProgress) => void },
+  opts: { slow?: boolean; rate?: 0.5 | 1; onProgress?: (progress: SpeechProgress) => void },
 ): Promise<SpeechResult> {
   if (!hasAudioContext()) return { ok: false, reason: 'unsupported' };
+  const spec = VOICES[language];
   const onProgress = opts.onProgress ?? (() => {});
 
   let context: AudioContext;
   try {
     context = getAudioContext();
-    onProgress({ phase: 'loading-model', percent: 0 });
+    // Resume inside the tap so mobile browsers allow audio once the voice is ready.
     await context.resume();
   } catch (error) {
     return { ok: false, reason: 'playback-failed', message: errorText(error) };
   }
 
-  let runtime: FrenchRuntime;
+  let runtime: VoiceRuntime;
   try {
-    runtime = await getFrenchRuntime(onProgress);
+    runtime = await getRuntime(language, onProgress);
   } catch (error) {
     return { ok: false, reason: 'model-load-failed', message: errorText(error) };
   }
 
   try {
     onProgress({ phase: 'generating' });
-    const { tokens } = runtime.phonemizer.phonemize(text);
-    const encoded = runtime.encoder.encode(tokens);
-    if (encoded.droppedSymbols.length > 0) {
-      throw new Error(`Unsupported French phoneme(s): ${encoded.droppedSymbols.join(', ')}`);
-    }
+    const { sentences, dropped } = runtime.encode(text);
+    if (dropped.length > 0) console.warn(`${spec.name} voice skipped unsupported symbol(s): ${dropped.join(' ')}`);
+    if (!sentences.length) throw new Error(`There is no ${spec.name} text to read.`);
 
     const { Tensor } = await import('onnxruntime-web/wasm');
-    const output = await runtime.session.run({
-      input: new Tensor('int64', BigInt64Array.from(encoded.phonemeIds, BigInt), [1, encoded.phonemeIds.length]),
-      input_lengths: new Tensor('int64', BigInt64Array.of(BigInt(encoded.phonemeIds.length)), [1]),
-      scales: new Tensor(
-        'float32',
-        Float32Array.of(
-          runtime.config.inference.noise_scale,
-          opts.slow ? runtime.config.inference.length_scale * 1.2 : runtime.config.inference.length_scale,
-          runtime.config.inference.noise_w,
-        ),
-        [3],
-      ),
-    });
-    const audio = output[runtime.session.outputNames[0]];
-    if (!audio || !(audio.data instanceof Float32Array) || audio.data.length === 0) {
-      throw new Error('French voice produced no audio samples.');
+    const { inference } = runtime.config;
+    const lengthScale = opts.rate !== undefined ? inference.length_scale / opts.rate : opts.slow ? inference.length_scale * 1.2 : inference.length_scale;
+    const scales = new Tensor('float32', Float32Array.of(inference.noise_scale, lengthScale, inference.noise_w), [3]);
+    const sampleRate = runtime.config.audio.sample_rate;
+    const gap = Math.round(SENTENCE_GAP * sampleRate);
+    const parts: Float32Array[] = [];
+    for (const ids of sentences) {
+      const output = await runtime.session.run({
+        input: new Tensor('int64', BigInt64Array.from(ids, BigInt), [1, ids.length]),
+        input_lengths: new Tensor('int64', BigInt64Array.of(BigInt(ids.length)), [1]),
+        scales,
+      });
+      const audio = output[runtime.session.outputNames[0]];
+      if (!audio || !(audio.data instanceof Float32Array) || audio.data.length === 0) {
+        throw new Error(`${spec.name} voice produced no audio.`);
+      }
+      parts.push(audio.data);
+    }
+    const length = parts.reduce((sum, part) => sum + part.length, 0) + gap * (parts.length - 1);
+    const samples = new Float32Array(length);
+    let offset = 0;
+    for (const part of parts) {
+      samples.set(part, offset);
+      offset += part.length + gap;
     }
 
     await context.resume();
-    const buffer = context.createBuffer(1, audio.data.length, runtime.config.audio.sample_rate);
-    buffer.copyToChannel(new Float32Array(audio.data), 0);
-    activeFrenchSource?.stop();
+    const buffer = context.createBuffer(1, samples.length, sampleRate);
+    buffer.copyToChannel(samples, 0);
+    stopSpeech();
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(context.destination);
-    activeFrenchSource = source;
+    activeSource = source;
     onProgress({ phase: 'playing' });
     await new Promise<void>((resolve, reject) => {
       source.onended = () => {
-        if (activeFrenchSource === source) activeFrenchSource = null;
+        if (activeSource === source) activeSource = null;
         resolve();
       };
       try {
         source.start();
       } catch (error) {
-        if (activeFrenchSource === source) activeFrenchSource = null;
+        if (activeSource === source) activeSource = null;
         reject(error);
       }
     });
     return { ok: true, warning: runtime.cacheWarning ?? undefined };
   } catch (error) {
-    if (activeFrenchSource) {
-      activeFrenchSource.onended = null;
-      activeFrenchSource = null;
+    if (activeSource) {
+      activeSource.onended = null;
+      activeSource = null;
     }
     return { ok: false, reason: 'playback-failed', message: errorText(error) };
   }
 }
+
+/* ---------- Device voices (Web Speech) ---------- */
 
 function voices(): SpeechSynthesisVoice[] {
   return speechSupported ? window.speechSynthesis.getVoices() : [];
@@ -396,18 +548,7 @@ function waitForVoice(lang: string): Promise<SpeechSynthesisVoice | null> {
 // Trigger voice discovery early; some browsers populate voices asynchronously.
 if (speechSupported) voices();
 
-/** Whether the browser currently has a voice for this language. */
-export function hasVoice(lang: string): boolean {
-  return (isFrench(lang) && hasAudioContext()) || pickVoice(lang) !== null;
-}
-
-/** Read text aloud and report missing voices or playback failures to the caller. */
-export async function speak(
-  text: string,
-  lang: string,
-  opts: { slow?: boolean; onProgress?: (progress: SpeechProgress) => void } = {},
-): Promise<SpeechResult> {
-  if (isFrench(lang) && hasAudioContext()) return speakFrench(text, opts);
+async function speakWithDevice(text: string, lang: string, opts: { slow?: boolean; rate?: 0.5 | 1 }): Promise<SpeechResult> {
   if (!speechSupported) return { ok: false, reason: 'unsupported' };
 
   const voice = await waitForVoice(lang);
@@ -417,7 +558,7 @@ export async function speak(
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = voice.lang || lang;
   utterance.voice = voice;
-  utterance.rate = opts.slow ? 0.6 : 0.95;
+  utterance.rate = opts.rate ?? (opts.slow ? 0.6 : 0.95);
 
   return new Promise((resolve) => {
     let settled = false;
@@ -429,11 +570,14 @@ export async function speak(
       utterance.onerror = null;
       resolve(result);
     };
-    const timeout = window.setTimeout(() => finish({ ok: false, reason: 'playback-failed' }), 15_000);
+    // Long sentences at half speed can take a while; allow roughly 0.3 s per character.
+    const timeout = window.setTimeout(() => finish({ ok: false, reason: 'playback-failed' }), Math.max(15_000, text.length * 300));
     utterance.onend = () => finish({ ok: true });
-    utterance.onerror = () => finish({ ok: false, reason: 'playback-failed' });
+    // A newer playback interrupting this one is not a failure.
+    utterance.onerror = (event) =>
+      finish(event.error === 'interrupted' || event.error === 'canceled' ? { ok: true } : { ok: false, reason: 'playback-failed' });
 
-    synth.cancel();
+    stopSpeech();
     try {
       synth.speak(utterance);
     } catch {
@@ -442,46 +586,75 @@ export async function speak(
   });
 }
 
+/** Whether this language can be spoken: a built-in voice or a voice installed on the device. */
+export function hasVoice(lang: string): boolean {
+  return (builtInVoiceLanguage(lang) !== null && hasAudioContext()) || pickVoice(lang) !== null;
+}
+
+/**
+ * Read text aloud and report missing voices or playback failures to the caller. French, Spanish and Hindi use the
+ * built-in voice (downloaded on first use); if it can't load, the device's own voice is used when there is one.
+ */
+export async function speak(
+  text: string,
+  lang: string,
+  opts: { slow?: boolean; rate?: 0.5 | 1; onProgress?: (progress: SpeechProgress) => void } = {},
+): Promise<SpeechResult> {
+  const language = builtInVoiceLanguage(lang);
+  if (language && hasAudioContext()) {
+    const result = await speakBuiltIn(language, text, opts);
+    if (result.ok || result.reason !== 'model-load-failed' || !pickVoice(lang)) return result;
+    const fallback = await speakWithDevice(text, lang, opts);
+    return fallback.ok
+      ? { ok: true, warning: `The built-in ${VOICES[language].name} voice couldn't load, so your device's voice was used. (${result.message ?? 'Check your connection.'})` }
+      : result;
+  }
+  return speakWithDevice(text, lang, opts);
+}
+
 /* ---------- Offline audio ---------- */
 
-export type FrenchVoiceStatus = 'downloaded' | 'missing' | 'unavailable';
+export type BuiltInVoiceStatus = 'downloaded' | 'missing' | 'unavailable';
 
-/** Whether the built-in French voice files are stored in this browser (without loading the 63 MB model). */
-export async function frenchVoiceStatus(): Promise<FrenchVoiceStatus> {
+/** Whether a built-in voice is stored in this browser (without loading the model). */
+export async function builtInVoiceStatus(language: VoiceLanguage): Promise<BuiltInVoiceStatus> {
   if (typeof window === 'undefined' || !('caches' in window) || !hasAudioContext()) return 'unavailable';
+  const spec = VOICES[language];
   try {
-    const cache = await window.caches.open(frenchModelCache);
-    const [model, config] = await Promise.all([cache.match(frenchModelUrl), cache.match(frenchConfigUrl)]);
+    const cache = await window.caches.open(spec.cacheName);
+    const [model, config] = await Promise.all([cache.match(spec.modelUrl), cache.match(spec.configUrl)]);
     if (!model || !config) return 'missing';
     const size = Number(model.headers.get('content-length'));
-    return !size || size === frenchVoiceModelSizeBytes ? 'downloaded' : 'missing';
+    return !size || size === spec.sizeBytes ? 'downloaded' : 'missing';
   } catch {
     return 'unavailable';
   }
 }
 
 /**
- * Download and prepare the French voice so it works offline: the model and config go to browser storage,
- * and loading the speech engine lets the service worker keep its code for offline use.
+ * Download and prepare a built-in voice so it works offline: the model and settings go to browser storage, and
+ * loading the speech engine lets the service worker keep its code for offline use.
  */
-export async function downloadFrenchVoice(
+export async function downloadBuiltInVoice(
+  language: VoiceLanguage,
   onProgress: (progress: SpeechProgress) => void,
 ): Promise<{ ok: true; warning?: string } | { ok: false; message: string }> {
-  if (!hasAudioContext()) return { ok: false, message: 'This browser cannot play the built-in French voice.' };
+  if (!hasAudioContext()) return { ok: false, message: `This browser cannot play the built-in ${VOICES[language].name} voice.` };
   try {
-    const runtime = await getFrenchRuntime(onProgress);
+    const runtime = await getRuntime(language, onProgress);
     return { ok: true, warning: runtime.cacheWarning ?? undefined };
   } catch (error) {
     return { ok: false, message: errorText(error) };
   }
 }
 
-/** Remove the stored French voice to free space. It downloads again on next use. */
-export async function removeFrenchVoice(): Promise<void> {
-  const runtime = frenchRuntimePromise ? await frenchRuntimePromise.catch(() => null) : null;
-  frenchRuntimePromise = null;
+/** Remove a stored built-in voice to free space. It downloads again on next use. */
+export async function removeBuiltInVoice(language: VoiceLanguage): Promise<void> {
+  const pending = runtimes.get(language);
+  runtimes.delete(language);
+  const runtime = pending ? await pending.catch(() => null) : null;
   await runtime?.session.release().catch(() => undefined);
-  if ('caches' in window) await window.caches.delete(frenchModelCache);
+  if ('caches' in window) await window.caches.delete(VOICES[language].cacheName);
 }
 
 export type DeviceVoiceStatus =

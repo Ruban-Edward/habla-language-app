@@ -2,9 +2,15 @@
 
 The interface supports light and dark themes from the header (also available while choosing a course). Your selection is saved in this browser.
 
-French pronunciation is generated locally in the browser with the Piper SIWIS voice; lesson text is not sent to a speech service. The first playback downloads about 63 MB of voice data from Hugging Face and loads the speech runtime, then stores the model in browser storage when available so later playback can work offline.
+Pronunciation for all three courses is generated locally in the browser with [Piper](https://github.com/OHF-Voice/piper1-gpl) voices; lesson text is not sent to a speech service. The first playback in a language downloads about 63 MB of voice data from Hugging Face and loads the speech runtime, then stores the model in browser storage when available so later playback works offline. If a voice can't load, the device's own text-to-speech voice is used when one is installed. Only the voice for the language being played stays in memory.
 
-French voice attribution: [fr_FR-siwis-medium](https://huggingface.co/Trelis/piper-fr-fr-siwis-medium), trained on the [SIWIS French Speech Synthesis Database](https://datashare.is.ed.ac.uk/handle/10283/2353), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Each voice needs phonemes in the form it was trained on. French uses the `@piper-plus/g2p` French phonemizer. Spanish and Hindi use small rule-based phonemizers in [`src/lib/g2p/`](./src/lib/g2p/) that reproduce eSpeak NG's output (the voices were trained on it) without shipping eSpeak NG: Spanish handles stress, diphthongs and soft b/d/g; Hindi handles the inherent vowel and its deletion, nasalisation and conjuncts. Their tests compare against eSpeak NG's phonemes for course text.
+
+Voice attribution:
+
+- French: [fr_FR-siwis-medium](https://huggingface.co/Trelis/piper-fr-fr-siwis-medium), trained on the [SIWIS French Speech Synthesis Database](https://datashare.is.ed.ac.uk/handle/10283/2353), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Spanish: [es_ES-davefx-medium](https://huggingface.co/rhasspy/piper-voices/tree/main/es/es_ES/davefx/medium), trained on a [CC0](https://creativecommons.org/publicdomain/zero/1.0/) dataset from [OHF-Voice/voice-datasets](https://github.com/OHF-Voice/voice-datasets).
+- Hindi: [hi_IN-rohan-medium](https://huggingface.co/rhasspy/piper-voices/tree/main/hi/hi_IN/rohan/medium), trained on the IIT Madras [Indic TTS](https://www.iitm.ac.in/donlab/indictts) Hindi Mono Male database under the [Indic TTS licence](https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf). Review that licence's terms before commercial use.
 
 Spanish, French, and Hindi each offer a 24-lesson path organized into Starter, Everyday, and More confident stages. Finish every lesson in a stage to unlock the next one. These are learning stages, not CEFR certifications. Hindi starts with Devanagari script lessons and shows romanization alongside vocabulary and example sentences.
 
@@ -18,13 +24,14 @@ Every vocabulary lesson starts with a preview of its words, meanings, pronunciat
 - **Romanization control.** Hindi learners can turn romanization off from the home screen or with the **abc** button during a lesson or mission, and turn it back on at any time.
 - **Real-life missions.** Short dialogues such as ordering at a café, finding your hotel, or meeting a new colleague. The learner chooses a reply (or types one in Spanish and French), and every wrong reply comes with a correction explaining what to change. Useful phrases can be saved at the end. Missions live in [`src/data/missions.ts`](./src/data/missions.ts).
 - **Phrasebook.** Save words, example sentences, and mission phrases to replay outside lessons.
+- **Translator.** Translate between English and the selected course language, hear the result at normal or half speed, and save it to the phrasebook. Translation needs an internet connection and sends submitted text to MyMemory; do not enter private or sensitive text. The free anonymous service has daily limits and accepts up to 500 bytes per request.
 
 ## Offline use
 
 The production build installs as an app and stores lessons, missions, reviews, and the phrasebook on the device, so studying works without a connection. Progress is always saved locally; cloud sync resumes when the device reconnects. The **Offline & audio** card on the home screen shows whether the app is ready offline, offers installation, and shows the audio status for each language:
 
-- **French** uses the built-in voice. Learners can download it ahead of time (about 63 MB for the voice plus up to 15 MB for the speech engine) and remove it to free space.
-- **Spanish and Hindi** use the device's own text-to-speech voices. The panel says whether the installed voice works offline or needs a connection, and what to install if no voice is available.
+- **French, Spanish and Hindi** each have a built-in voice. Learners can download a voice ahead of time (about 63 MB each, plus up to 15 MB for the speech engine they share) and remove it to free space.
+- **English** (heard in the translator) uses the device's own text-to-speech voice.
 
 Offline support comes from a small service worker in [`pwa/service-worker.js`](./pwa/service-worker.js). It is built by a Vite plugin in [`vite.config.ts`](./vite.config.ts), which lists the app files to store on install. Offline support only runs in a production build (`npm run build && npm run preview`), not on the development server.
 

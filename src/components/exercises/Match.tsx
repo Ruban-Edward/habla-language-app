@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { shuffle } from '../../lib/generate';
 import { sfx } from '../../lib/sfx';
-import { speak } from '../../lib/speech';
+import { playSpeech } from '../../lib/speechStatus';
 import type { MatchExercise } from '../../types';
 import type { ExerciseProps } from './types';
 
@@ -56,7 +56,7 @@ export function Match({ exercise, course, disabled, sound, onAnswer }: ExerciseP
             className={cls('t', t)}
             disabled={disabled || matched.includes(t) || !!miss}
             onClick={() => {
-              if (sound) speak(t, course.lang);
+              if (sound) void playSpeech(t, course.lang);
               attempt(selLeft === t ? null : t, selRight);
             }}
           >

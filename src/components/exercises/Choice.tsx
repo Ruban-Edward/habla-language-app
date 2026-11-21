@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { speak } from '../../lib/speech';
+import { playSpeech } from '../../lib/speechStatus';
 import type { ChoiceExercise } from '../../types';
 import { AudioPrompt } from '../ui';
 import { langOf, type ExerciseProps } from './types';
@@ -8,7 +8,7 @@ export function Choice({ exercise, course, disabled, sound, onAnswer }: Exercise
   const [selected, setSelected] = useState<number | null>(null);
 
   useEffect(() => {
-    if (exercise.audio && sound) speak(exercise.audio, course.lang);
+    if (exercise.audio && sound) void playSpeech(exercise.audio, course.lang);
   }, [exercise.audio, course.lang, sound]);
 
   const choose = (i: number) => {
@@ -16,7 +16,7 @@ export function Choice({ exercise, course, disabled, sound, onAnswer }: Exercise
     setSelected(i);
     onAnswer(exercise.options[i].label);
     const s = exercise.options[i].speak;
-    if (s && sound && !exercise.audio) speak(s, course.lang);
+    if (s && sound && !exercise.audio) void playSpeech(s, course.lang);
   };
 
   useEffect(() => {
