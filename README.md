@@ -1,78 +1,327 @@
-# habla-language-app
+<div align="center">
 
-The interface supports light and dark themes from the header (also available while choosing a course). Your selection is saved in this browser.
+<img src="public/favicon.svg" alt="Habla logo" width="120" />
 
-Pronunciation for all three courses is generated locally in the browser with [Piper](https://github.com/OHF-Voice/piper1-gpl) voices; lesson text is not sent to a speech service. The first playback in a language downloads about 63 MB of voice data from Hugging Face and loads the speech runtime, then stores the model in browser storage when available so later playback works offline. If a voice can't load, the device's own text-to-speech voice is used when one is installed. Only the voice for the language being played stays in memory.
+# Habla
 
-Each voice needs phonemes in the form it was trained on. French uses the `@piper-plus/g2p` French phonemizer. Spanish, Hindi and German use small rule-based phonemizers in [`src/lib/g2p/`](./src/lib/g2p/) that produce eSpeak NG-style phonemes (the voices were trained on them) without shipping eSpeak NG: Spanish handles stress, diphthongs and soft b/d/g; Hindi handles the inherent vowel and its deletion, nasalisation and conjuncts; German handles vowel length, stress and prefixes, ch/sch/sp/st, final devoicing and vocalised r, with a list of loanwords and irregular words. The Spanish and Hindi tests compare against eSpeak NG's phonemes for course text; the German expectations are hand-written and should be checked against `espeak-ng -v de --ipa`.
+**A friendly place to build a language-learning habit.**
 
-Voice attribution:
+Learn Spanish, French, Hindi, German, or Japanese with short lessons, useful conversations, and practice that fits into everyday life.
 
-- French: [fr_FR-siwis-medium](https://huggingface.co/Trelis/piper-fr-fr-siwis-medium), trained on the [SIWIS French Speech Synthesis Database](https://datashare.is.ed.ac.uk/handle/10283/2353), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-- Spanish: [es_ES-davefx-medium](https://huggingface.co/rhasspy/piper-voices/tree/main/es/es_ES/davefx/medium), trained on a [CC0](https://creativecommons.org/publicdomain/zero/1.0/) dataset from [OHF-Voice/voice-datasets](https://github.com/OHF-Voice/voice-datasets).
-- German: [de_DE-thorsten-medium](https://huggingface.co/rhasspy/piper-voices/tree/main/de/de_DE/thorsten/medium), trained on Thorsten Müller's [Thorsten-Voice](https://www.thorsten-voice.de/) dataset, released under [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
-- Hindi: [hi_IN-rohan-medium](https://huggingface.co/rhasspy/piper-voices/tree/main/hi/hi_IN/rohan/medium), trained on the IIT Madras [Indic TTS](https://www.iitm.ac.in/donlab/indictts) Hindi Mono Male database under the [Indic TTS licence](https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf). Review that licence's terms before commercial use.
+[![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6-646cff?logo=vite&logoColor=white)](https://vite.dev/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20Sync-3fcf8e?logo=supabase&logoColor=white)](https://supabase.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-f59e0b)](LICENSE)
 
-Spanish, French, Hindi, German and Japanese each offer a 24-lesson path organized into Starter, Everyday, and More confident stages. Finish every lesson in a stage to unlock the next one. These are learning stages, not CEFR certifications. Hindi starts with Devanagari script lessons and Japanese with hiragana; both show romanization (Hepburn romaji for Japanese) alongside vocabulary and example sentences. Japanese sentences are written with a space between words, as beginner textbooks do, so they can be built from word tiles; answer checking ignores those spaces.
+**Learn at your pace · Keep your progress · Study offline**
 
-Every vocabulary lesson starts with a preview of its words, meanings, pronunciations, and example sentences before the exercises begin. Learners can replay any word or example as they study.
+</div>
 
-## Learning features
+---
 
-The home screen is split into tabs (**Dashboard**, **Learning path**, **Missions**, **Stories**, **Culture** and **Phrasebook**) so nothing needs a long scroll. The selected tab is kept in the address (for example `#path`), so finishing a lesson or reloading returns to it, and **View learning path** on the dashboard jumps straight to the current chapter.
+## ✨ Highlights
 
-- **Goal setting.** On first visit, learners say why they're learning (travel, people they know, work, or curiosity) and pick a daily pace. The goal decides which missions are suggested first, and both can be changed at any time.
-- **Spaced review.** Each word a learner meets is scheduled for review. A miss brings it back after 15 minutes; correct answers in a row space it out to 1, 3, 7, 14, then 30 days. The home screen also shows **week-later recall**: how many words the learner still knew when they came back to them after a week or more.
-- **Usage notes.** Every unit has short notes on how words work, such as Spanish gender and regional words, French articles, elision and *tu*/*vous*, German genders, cases and word order, Hindi vowel signs, sound contrasts and *aap*/*tum*, and Japanese particles, politeness and counters. The notes appear in lesson previews and under each unit on the learning path. They live in [`src/data/notes.ts`](./src/data/notes.ts).
-- **Romanization control.** Hindi and Japanese learners can turn romanization off from the home screen or with the **abc** button during a lesson or mission, and turn it back on at any time.
-- **Speaking practice.** Where the browser supports speech recognition (Chrome, Edge), lessons and reviews include *listen → repeat → check* exercises: first single words, then one short sentence per lesson. Recognised speech is matched leniently (accents and punctuation don't count, and a near miss is accepted). **Can't speak now** skips the rest of the session's speaking exercises without a penalty and pauses them for an hour. Listening exercises are unaffected, and speaking exercises never appear when sound is off.
-- **Progress dashboard.** Daily XP for the last 7 or 30 days, words in review and mastered (review interval of 14 days or more), study time, an accuracy trend for recent sessions, and a 16-week practice calendar.
-- **Real-life missions.** Short dialogues such as ordering at a café, shopping at a market, seeing a doctor, booking a table by phone, checking in at the airport, or asking for the Wi-Fi. The learner chooses a reply (or types one in Spanish, French and German), and every wrong reply comes with a correction explaining what to change. Useful phrases can be saved at the end. Missions live in [`src/data/missions.ts`](./src/data/missions.ts) and [`src/data/missions-everyday.ts`](./src/data/missions-everyday.ts).
-- **Mini-stories.** Five-sentence stories: tap a line for its meaning or listen to the whole story, then answer comprehension questions. They live in [`src/data/stories.ts`](./src/data/stories.ts).
-- **Culture notes.** A short note on customs each day (greetings, tipping, *tú*/*usted*, *la bise*, namaste and more), with a phrase to try. They live in [`src/data/culture.ts`](./src/data/culture.ts).
-- **Accessibility.** Answer feedback is announced to screen readers, animations stop when the device asks for reduced motion, and **Text size** (in the top bar, or the menu on phones) enlarges everything, including Devanagari. Keyboard: Enter checks and continues, 1–4 picks an answer, and Escape quits a lesson.
-- **Phrasebook.** Save words, example sentences, and mission phrases to replay outside lessons.
-- **Translator.** Translate between English and the selected course language, hear the result at normal or half speed, and save it to the phrasebook. Translation needs an internet connection and sends submitted text to MyMemory; do not enter private or sensitive text. The free anonymous service has daily limits and accepts up to 500 bytes per request.
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <h3>🗺️ Find your way</h3>
+      <ul align="left">
+        <li>Follow a 24-lesson path in three stages</li>
+        <li>Learn with previews and clear usage notes</li>
+        <li>Learn Hindi in Devanagari or Japanese in hiragana</li>
+      </ul>
+    </td>
+    <td align="center" width="33%">
+      <h3>💬 Practice for real life</h3>
+      <ul align="left">
+        <li>Try everyday missions and mini-stories</li>
+        <li>Listen, repeat, and practise speaking</li>
+        <li>Save useful words and phrases</li>
+      </ul>
+    </td>
+    <td align="center" width="33%">
+      <h3>📈 Keep learning</h3>
+      <ul align="left">
+        <li>Review vocabulary with spaced repetition</li>
+        <li>Track XP, streaks, accuracy, and study time</li>
+        <li>Install the app and study offline</li>
+      </ul>
+    </td>
+  </tr>
+</table>
 
-## Offline use
+---
 
-The production build installs as an app and stores lessons, missions, reviews, and the phrasebook on the device, so studying works without a connection. Progress is always saved locally; cloud sync resumes when the device reconnects. The **Offline & audio** card on the home screen shows whether the app is ready offline, offers installation, and shows the audio status for each language:
+## 🚀 Quick Start
 
-- **Japanese** uses the device's own text-to-speech voice for now (most phones and computers include one); the offline panel shows whether this device has it.
-- **French, Spanish, Hindi and German** each have a built-in voice. Learners can download a voice ahead of time (about 63 MB each, plus up to 15 MB for the speech engine they share) and remove it to free space.
-- **English** (heard in the translator) uses the device's own text-to-speech voice.
+> **Prerequisites:** [Node.js](https://nodejs.org/) (v18+) and npm
 
-Offline support comes from a small service worker in [`pwa/service-worker.js`](./pwa/service-worker.js). It is built by a Vite plugin in [`vite.config.ts`](./vite.config.ts), which lists the app files to store on install. Offline support only runs in a production build (`npm run build && npm run preview`), not on the development server.
+```bash
+# Clone the repo
+git clone https://github.com/Ruban-Edward/habla-language-app.git
+cd habla-language-app
 
-## Content review
+# Install dependencies & launch
+npm install
+npm run dev
+```
 
-The course content needs review by fluent speakers and by learners: translations, natural phrasing, regional usage, and difficulty. Signed-in learners can use **Report a problem with this content** in any lesson preview or at the end of a mission. Reports go to the `content_reports` table (see the setup below), where learners can submit but not read them; review them in the Supabase dashboard. Week-later recall on the home screen gives a first signal of whether learners actually remember what they studied, not just whether they finished lessons.
+Open the local URL printed by Vite (usually `http://localhost:5173`).
+A Supabase account is **not** required — you can start learning right away.
 
-## Optional account and cloud progress setup
+---
 
-Progress is stored in this browser by default. To enable accounts and sync progress across devices:
+## 🎓 Your First Lesson
 
-1. Create a Supabase project.
-2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql) to create the per-user progress table, the content-report table, and their row-level security policies. If you set up an earlier version, run only the `content_reports` part at the end of the file.
-3. Copy `.env.example` to `.env.local` and fill in the project URL and anon key from **Project Settings → API**:
+1. **Pick a language** — Spanish, French, Hindi, German, or Japanese.
+2. **Set your goals** — choose a daily pace and a learning reason. Change them anytime.
+3. **Start learning** — open **Learning path**, preview vocabulary, meanings, and examples, then dive into exercises.
+4. **Explore more** — try **Missions** for practical dialogues, **Stories** for short reading practice, and **Phrasebook** for saved phrases.
+5. **Track progress** — check the **Dashboard** for activity and words due for review.
 
-   ```sh
+> [!TIP]
+> The home screen has six tabs: **Dashboard**, **Learning path**, **Missions**, **Stories**, **Culture**, and **Phrasebook**. The selected tab is reflected in the URL hash (e.g. `#path`) and is restored when you return.
+
+---
+
+## 📚 Features
+
+### 🧩 Guided Courses
+
+Each language has **24 lessons** grouped into three stages:
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────────┐
+│   Starter   │───▶│  Everyday   │───▶│ More Confident  │
+│  Lessons 1-8│    │ Lessons 9-16│    │  Lessons 17-24  │
+└─────────────┘    └─────────────┘    └─────────────────┘
+```
+
+Complete a stage to unlock the next. These are learning stages, not CEFR certifications.
+
+### 🔁 Spaced Vocabulary Review
+
+New words return for review on an intelligent schedule:
+
+| Attempt | Interval |
+|:-------:|:--------:|
+| ❌ Miss | 15 min |
+| ✅ 1st correct | 1 day |
+| ✅ 2nd correct | 3 days |
+| ✅ 3rd correct | 7 days |
+| ✅ 4th correct | 14 days |
+| ✅ 5th correct | 30 days |
+
+The dashboard also tracks how many words you remember after a week or more.
+
+### 🗣️ Missions & Stories
+
+- **Missions** — practise real conversations: ordering at a café, shopping, seeing a doctor, checking in at an airport. Get corrections when wrong, and save useful phrases when you finish.
+- **Mini-stories** — read or listen to five-sentence stories, tap a line to see its meaning, then answer comprehension questions.
+- **Culture notes** — discover a short daily note about customs and expressions, with a phrase to try.
+
+### 🎙️ Speaking Practice
+
+On browsers with speech recognition (Chrome, Edge), lessons and reviews include listen-and-repeat exercises. Accent and punctuation differences are handled leniently.
+
+> Choose **Can't speak now** to skip speaking exercises for an hour without penalty. Speaking exercises require sound to be on.
+
+### 📊 Progress Dashboard
+
+Track your learning with:
+
+- 📅 Daily XP and streaks
+- ⏱️ Study time
+- 🎯 Recent accuracy
+- 📖 Words in review or mastered
+- 📆 16-week activity calendar
+
+### ⚙️ Personal Settings
+
+- 🌙 Light and dark themes
+- 🔤 Adjustable text size
+- 🔊 Sound toggle
+- 🔠 Romanization toggle for Hindi and Japanese
+
+### ♿ Accessibility
+
+- Feedback announced to screen readers
+- Respects reduced-motion settings
+- Enlargeable text
+
+**Keyboard shortcuts during lessons:**
+
+| Key | Action |
+|:---:|:------:|
+| `Enter` | Check or continue |
+| `1`–`4` | Choose an answer |
+| `Esc` | Exit |
+
+---
+
+## 🌏 Language-Specific Notes
+
+| Language | Script | Romanization |
+|:--------:|:------:|:------------:|
+| 🇮🇳 Hindi | Devanagari | Toggle with **abc** button |
+| 🇯🇵 Japanese | Hiragana | Toggle with **abc** button |
+
+Japanese example sentences include spaces between words to help beginner reading and word-tile exercises. Answer checking ignores those spaces.
+
+---
+
+## 🔊 Audio & Offline
+
+Install Habla from **Offline & audio** on the home screen to keep lessons, missions, reviews, and your phrasebook available without a connection.
+
+```bash
+# Offline support requires a production build
+npm run build
+npm run preview
+```
+
+Pronunciation audio runs **entirely on your device** — lesson text is never sent to a speech service.
+
+<details>
+<summary><strong>🎵 Voice Details</strong></summary>
+
+| Language | Voice Type | First Download |
+|:--------:|:----------:|:--------------:|
+| 🇫🇷 French | Built-in downloadable | ~63 MB voice + ~15 MB engine |
+| 🇪🇸 Spanish | Built-in downloadable | ~63 MB voice + ~15 MB engine |
+| 🇮🇳 Hindi | Built-in downloadable | ~63 MB voice + ~15 MB engine |
+| 🇩🇪 German | Built-in downloadable | ~63 MB voice + ~15 MB engine |
+| 🇯🇵 Japanese | Device TTS | Depends on installed voice |
+| 🇬🇧 English | Device TTS | Depends on installed voice |
+
+Download voices ahead of time or remove them later in **Offline & audio**. If a built-in voice cannot load, Habla falls back to your device's voice when available.
+
+</details>
+
+> [!NOTE]
+> Your progress is always saved on this device. When you're offline, learning continues as usual; cloud sync resumes after you reconnect.
+
+---
+
+## 🌐 Translation & Privacy
+
+The translator works between English and the selected course language, can read the result at normal or half speed, and can save it to your phrasebook. Translation requires an internet connection and sends submitted text to [MyMemory](https://mymemory.translated.net/).
+
+> [!CAUTION]
+> The anonymous service has daily limits and accepts up to 500 bytes per request. **Do not submit private or sensitive text.**
+
+---
+
+## ☁️ Optional Accounts & Cloud Sync
+
+Without setup, progress stays in this browser. To add accounts and sync progress across devices:
+
+<details>
+<summary><strong>📋 Setup Instructions</strong></summary>
+
+1. Create a [Supabase](https://supabase.com/) project.
+2. Run [`supabase/schema.sql`](./supabase/schema.sql) in the SQL Editor — it creates the progress and content-report tables with row-level security policies.
+3. Copy the env template and add your credentials:
+
+   ```bash
    cp .env.example .env.local
    ```
 
-4. Restart the Vite development server. For deployed sites, set the same `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` environment variables in the static host's build settings.
-5. In Supabase Authentication settings, enable email/password sign-in and add the app's local and deployed URLs to the allowed redirect URLs. To enable Google sign-in, configure the Google OAuth provider in Supabase with a Google OAuth web client ID and secret. In Google Cloud, add your app origins and the Supabase callback URL shown in the provider settings.
-6. Open **Sign in** in the app to create an account. If the account has no cloud save yet, the current browser's progress is uploaded. If a cloud save exists, progress made on this browser while signed out is merged into it. If this browser's progress belongs to a different account, the account's cloud save replaces it, so two people's progress is never mixed.
+   Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from **Project Settings → API**. For deployment, configure the same variables in your hosting provider's build settings.
 
-The anon key is intended for browser use. Do not put a service-role key in the app. Row-level security in the SQL script ensures each signed-in user can access only their own progress.
+4. Restart the Vite development server.
+5. In Supabase Authentication settings:
+   - Enable email/password sign-in
+   - Add your local and deployed app URLs to the allowed redirect URLs
+   - *(Optional)* For Google sign-in, configure the Google OAuth provider in Supabase and add your app origins and Supabase callback URL in Google Cloud.
+6. Choose **Sign in** in Habla to create an account or sign in.
 
-Progress syncs about a second after each change, when the device reconnects, and when the app is reopened. Changes from several devices are merged rather than overwritten, including progress made offline:
+</details>
 
-- XP, lesson and mission attempts, and week-later recall add up what each device earned since its last sync. Best scores take the higher value.
-- Dashboard history keeps the sessions from every device, each counted once.
-- Each word's review schedule keeps the most recent review.
-- Phrasebook entries saved on any device are kept, and a phrase removed on one device stays removed.
-- Settings (daily goal, sound, romanization, learning goal, course) take the most recent change, and the streak continues across days practised on different devices.
-- **Reset progress** wins over older progress from other devices.
+<details>
+<summary><strong>🔄 How Sync Works</strong></summary>
 
-Each save checks that the cloud copy hasn't changed since it was read; if another device wrote first, the app reads, merges, and tries again. The browser always keeps a local copy. Without the Supabase environment variables, the app continues to work with local-only progress.
+- When an account has no cloud save yet, Habla uploads this browser's progress
+- If a cloud save already exists, local progress made while signed out is merged into it
+- Progress from a different account replaces the previous save — different people's progress is never mixed
+
+Sync runs after changes, on reconnect, and when you reopen the app. It merges across devices:
+
+| Data | Merge Strategy |
+|:-----|:---------------|
+| XP & attempts | Added together |
+| Scores | Best score kept |
+| Review schedules | Latest review used |
+| Saved phrases | Retained from all devices (including removals) |
+| Settings | Latest change wins |
+| Streaks | Continues across days on different devices |
+| Reset progress | Takes precedence over older saves |
+
+The browser always retains a local copy.
+
+</details>
+
+> [!WARNING]
+> Use only the Supabase **anon key** in the browser app. **Never put a service-role key in client-side code.** Row-level security in the SQL script restricts each signed-in user to their own progress.
+
+---
+
+## 🤝 Help Improve the Courses
+
+Course translations, phrasing, regional usage, and difficulty benefit from review by fluent speakers and learners.
+
+Signed-in learners can use **Report a problem with this content** in a lesson preview or at the end of a mission. Reports are stored in the `content_reports` table for review in the Supabase dashboard; learners cannot read other reports.
+
+---
+
+## 🛠️ Development
+
+```bash
+npm run dev       # 🚀 Start the local development server
+npm test          # 🧪 Run the test suite
+npm run build     # 📦 Type-check and create a production build
+npm run preview   # 👀 Preview the production build (with offline support)
+```
+
+**Tech Stack:**
+
+| | Technology | Purpose |
+|:-:|:-----------|:--------|
+| ⚛️ | React 18 | UI framework |
+| 🔷 | TypeScript 5 | Type safety |
+| ⚡ | Vite 6 | Build tool & dev server |
+| 🧪 | Vitest | Test runner |
+| 🟢 | Supabase | Auth & cloud sync |
+| 🧠 | ONNX Runtime | On-device voice synthesis |
+| 🗣️ | Piper TTS | Downloadable voices |
+
+---
+
+## 📜 Voice Credits & Licences
+
+The downloadable voices are distributed by their respective projects. Review the source and licence terms, especially before commercial use.
+
+<details>
+<summary><strong>Show voice sources and attribution</strong></summary>
+
+| Voice | Model | Dataset | Licence |
+|:------|:------|:--------|:--------|
+| 🇫🇷 **French** — `fr_FR-siwis-medium` | [Model](https://huggingface.co/Trelis/piper-fr-fr-siwis-medium) | [SIWIS French Speech Synthesis Database](https://datashare.is.ed.ac.uk/handle/10283/2353) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| 🇪🇸 **Spanish** — `es_ES-davefx-medium` | [Model](https://huggingface.co/rhasspy/piper-voices/tree/main/es/es_ES/davefx/medium) | [CC0 dataset](https://github.com/OHF-Voice/voice-datasets) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| 🇩🇪 **German** — `de_DE-thorsten-medium` | [Model](https://huggingface.co/rhasspy/piper-voices/tree/main/de/de_DE/thorsten/medium) | [Thorsten-Voice](https://www.thorsten-voice.de/) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| 🇮🇳 **Hindi** — `hi_IN-rohan-medium` | [Model](https://huggingface.co/rhasspy/piper-voices/tree/main/hi/hi_IN/rohan/medium) | [Indic TTS](https://www.iitm.ac.in/donlab/indictts) Hindi Mono Male | [Review licence](https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf) |
+
+French uses the `@piper-plus/g2p` French phonemizer. Spanish, Hindi, and German use small rule-based phonemizers in [`src/lib/g2p/`](./src/lib/g2p/) to produce eSpeak NG-style phonemes without shipping eSpeak NG. Spanish and Hindi tests compare course text against eSpeak NG; German expectations are hand-written and should be checked against `espeak-ng -v de --ipa`.
+
+</details>
+
+---
+
+<div align="center">
+
+**Made with ❤️ for language learners everywhere**
+
+[⬆ Back to top](#habla)
+
+</div>
