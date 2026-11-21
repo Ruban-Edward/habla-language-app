@@ -83,7 +83,7 @@ export function TopBar({
   return (
     <header className="topbar">
       <div className="brand" aria-label="Habla">
-        <span className="brand-mark" aria-hidden="true">h.</span>
+        <img className="brand-mark" src="/favicon.svg" alt="" aria-hidden="true" />
         <span className="brand-name">habla<span className="brand-period">.</span></span>
       </div>
       <div className="stats">
