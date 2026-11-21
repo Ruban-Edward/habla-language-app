@@ -1,4 +1,13 @@
-import { shiftDay, type LessonRecord, type Progress, type RecallStats, type SavedPhrase, type WordReview } from './progress';
+import {
+  SESSION_HISTORY_LIMIT,
+  shiftDay,
+  type LessonRecord,
+  type Progress,
+  type RecallStats,
+  type SavedPhrase,
+  type SessionStat,
+  type WordReview,
+} from './progress';
 
 /**
  * Merge two copies of a learner's progress, e.g. this device's and the cloud's.
@@ -32,6 +41,7 @@ export function mergeProgress(local: Progress, remote: Progress, base: Progress 
     recall: mergeRecall(local.recall, remote.recall, b?.recall),
     wordReviews: mergeReviews(local.wordReviews, remote.wordReviews),
     savedPhrases: mergePhrases(local.savedPhrases, remote.savedPhrases, b?.savedPhrases),
+    sessionHistory: mergeSessions(local.sessionHistory, remote.sessionHistory),
     hearts: heartsSide.hearts,
     heartsUpdatedAt: heartsSide.heartsUpdatedAt,
     lastActiveDate,
@@ -109,6 +119,15 @@ function mergeReviews(local: Record<string, WordReview>, remote: Record<string, 
     if (!other || review.lastReviewedAt > other.lastReviewedAt) out[key] = review;
   }
   return out;
+}
+
+/** Sessions from both sides, each once (a session is identified by its course, finish time and result), oldest first. */
+function mergeSessions(local: SessionStat[] = [], remote: SessionStat[] = []): SessionStat[] {
+  const byId = new Map<string, SessionStat>();
+  for (const session of [...remote, ...local]) {
+    byId.set(`${session.courseId}@${session.at}:${session.xp}:${session.accuracy}:${session.durationMs}`, session);
+  }
+  return [...byId.values()].sort((a, b) => a.at - b.at).slice(-SESSION_HISTORY_LIMIT);
 }
 
 /** Phrases saved on either side are kept, unless one side removed a phrase both had before. */

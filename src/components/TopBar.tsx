@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { MAX_HEARTS, msUntilNextHeart, type Progress } from '../lib/progress';
-import type { Course } from '../types';
+import type { Course, TextSize } from '../types';
 import { CourseBadge, formatDuration } from './ui';
 
 type Props = {
@@ -17,7 +17,15 @@ type Props = {
   syncError: string | null;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  textSize: TextSize;
+  onTextSize: (size: TextSize) => void;
 };
+
+const TEXT_SIZE_OPTIONS: { value: TextSize; label: string }[] = [
+  { value: 'normal', label: 'Default' },
+  { value: 'large', label: 'Large' },
+  { value: 'larger', label: 'Larger' },
+];
 
 /** 1240 → "1.2k" for the compact phone header. */
 function compactNumber(value: number): string {
@@ -38,6 +46,8 @@ export function TopBar({
   syncError,
   theme,
   onToggleTheme,
+  textSize,
+  onTextSize,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -45,6 +55,8 @@ export function TopBar({
   const heartTitle =
     progress.hearts >= MAX_HEARTS ? 'Hearts are full' : `Next heart in ${formatDuration(next ?? 0)}`;
   const nextTheme = theme === 'light' ? 'dark' : 'light';
+  const sizeIndex = TEXT_SIZE_OPTIONS.findIndex((option) => option.value === textSize);
+  const nextSize = TEXT_SIZE_OPTIONS[(sizeIndex + 1) % TEXT_SIZE_OPTIONS.length];
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -113,6 +125,15 @@ export function TopBar({
         </button>
         <button
           type="button"
+          className="icon-btn text-size-toggle topbar-wide"
+          onClick={() => onTextSize(nextSize.value)}
+          aria-label={`Text size: ${TEXT_SIZE_OPTIONS[sizeIndex].label}. Change to ${nextSize.label}`}
+          title={`Text size: ${TEXT_SIZE_OPTIONS[sizeIndex].label}`}
+        >
+          <span aria-hidden="true">A<small>A</small></span>
+        </button>
+        <button
+          type="button"
           className={`account-btn topbar-wide ${syncError ? 'has-sync-error' : ''}`}
           onClick={onAccount}
           aria-label={syncError ? `Account, sync issue: ${syncError}` : accountLabel}
@@ -145,6 +166,25 @@ export function TopBar({
               <button type="button" role="menuitem" onClick={choose(onToggleTheme)}>
                 <span aria-hidden="true">{theme === 'light' ? '☾' : '☀'}</span> {theme === 'light' ? 'Dark theme' : 'Light theme'}
               </button>
+              <div className="topbar-menu-sizes" role="group" aria-label="Text size">
+                <span>Text size</span>
+                <div>
+                  {TEXT_SIZE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={textSize === option.value}
+                      aria-label={option.label}
+                      title={option.label}
+                      className={`size-${option.value}`}
+                      onClick={() => onTextSize(option.value)}
+                    >
+                      A
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button type="button" role="menuitem" className={syncError ? 'has-sync-error' : ''} onClick={choose(onAccount)}>
                 <span aria-hidden="true">{syncError ? '⚠' : '◉'}</span> {syncError ? 'Account · sync issue' : accountLabel}
               </button>

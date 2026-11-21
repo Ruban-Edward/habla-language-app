@@ -3,7 +3,7 @@ import type { UsageNote } from '../types';
 /**
  * Short usage notes per unit: how words work, not only what they mean.
  * Keyed by course id, then by unprefixed unit id. Every unit should have at least one note
- * (the content test enforces this). Hindi examples carry romanization.
+ * (the content test enforces this). Hindi and Japanese examples carry romanization.
  */
 export const USAGE_NOTES: Record<string, Record<string, UsageNote[]>> = {
   es: {
@@ -463,6 +463,301 @@ export const USAGE_NOTES: Record<string, Record<string, UsageNote[]>> = {
         examples: [
           { t: 'मैं ज़िम्मेदारी लूँगा। / लूँगी।', en: 'I will take responsibility. (male / female speaker)', roman: 'main zimmedaari loonga. / loongi.' },
         ],
+      },
+    ],
+  },
+  de: {
+    u1: [
+      {
+        title: 'Du or Sie',
+        body: 'Use du with friends, family, children and other young people, and Sie with strangers, older people and at work. Sie is always written with a capital S, and the verb changes with it.',
+        examples: [
+          { t: 'Wie heißt du?', en: 'What’s your name? (du)' },
+          { t: 'Wie heißen Sie?', en: 'What’s your name? (Sie)' },
+        ],
+      },
+      {
+        title: 'Nouns are capitalised',
+        body: 'Every German noun starts with a capital letter, wherever it is in the sentence: der Mann, die Frau, das Mädchen. It is a handy clue when you read.',
+      },
+      {
+        title: 'Greetings through the day',
+        body: 'Guten Morgen in the morning, Guten Tag during the day, Guten Abend in the evening. Hallo and Tschüss are casual; Auf Wiedersehen is the polite goodbye.',
+      },
+    ],
+    u2: [
+      {
+        title: 'Three genders: der, die, das',
+        body: 'Every noun is masculine (der), feminine (die) or neuter (das), and the gender is often unpredictable. Learn the article with the noun: der Apfel, die Milch, das Brot. Ein goes with der and das nouns, eine with die nouns.',
+      },
+      {
+        title: 'Ordering politely',
+        body: 'Ich hätte gern… (I would like…) is the polite way to order. Ich möchte… works too. Ich will… sounds demanding.',
+        examples: [{ t: 'Ich hätte gern einen Kaffee, bitte.', en: 'I’d like a coffee, please.' }],
+      },
+      {
+        title: 'No word for “some”',
+        body: 'For an unspecified amount, German simply drops the article: Ich trinke Wasser (I drink water / some water).',
+      },
+    ],
+    u3: [
+      {
+        title: 'Mein and meine',
+        body: 'Possessives follow the noun’s gender like ein does: mein Vater, mein Haus, but meine Mutter, meine Familie.',
+        examples: [{ t: 'Meine Schwester und mein Bruder.', en: 'My sister and my brother.' }],
+      },
+      {
+        title: 'Einen after haben',
+        body: 'The direct object goes into the accusative case. Only masculine words change: ein becomes einen, der becomes den.',
+        examples: [{ t: 'Ich habe einen Bruder und eine Schwester.', en: 'I have a brother and a sister.' }],
+      },
+      {
+        title: 'Adjective endings',
+        body: 'After ist, an adjective takes no ending: Das Haus ist klein. Before a noun it does: ein kleines Haus, eine kleine Katze.',
+      },
+    ],
+    u4: [
+      {
+        title: 'Verb in second place',
+        body: 'In a statement, the verb is always the second element. If you start with heute or another word, the subject moves after the verb.',
+        examples: [
+          { t: 'Ich fahre heute in die Stadt.', en: 'I’m going into town today.' },
+          { t: 'Heute fahre ich in die Stadt.', en: 'Today I’m going into town.' },
+        ],
+      },
+      {
+        title: 'Fahren or gehen',
+        body: 'Gehen means going on foot; fahren means going by car, train or bike. Germans are precise about this.',
+      },
+      {
+        title: 'Telling the time',
+        body: 'Wie spät ist es? or Wie viel Uhr ist es? both ask the time. Timetables and bookings use the 24-hour clock: neunzehn Uhr is 7 pm.',
+      },
+    ],
+    u5: [
+      {
+        title: 'Separable verbs',
+        body: 'Verbs such as aufwachen and ankommen split in a sentence: the prefix jumps to the end.',
+        examples: [
+          { t: 'Ich wache um sieben Uhr auf.', en: 'I wake up at seven.' },
+          { t: 'Der Zug kommt um neun an.', en: 'The train arrives at nine.' },
+        ],
+      },
+      {
+        title: 'The spoken past: haben or sein + participle',
+        body: 'Everyday German uses the Perfekt for the past. Most verbs take haben; verbs of movement or change, such as gehen and fahren, take sein. The participle goes to the end.',
+        examples: [
+          { t: 'Wir haben ein Museum besucht.', en: 'We visited a museum.' },
+          { t: 'Wir sind nach Hause gegangen.', en: 'We went home.' },
+        ],
+      },
+    ],
+    u6: [
+      {
+        title: 'Könnten for suggestions',
+        body: 'Wir könnten… (we could…) makes a soft suggestion. Hast du Zeit? asks whether someone is free.',
+      },
+      {
+        title: 'Comparing things',
+        body: 'Add -er for “more” and use als for “than”: praktischer als, günstiger als. For “the most”, use am …sten or the …ste.',
+        examples: [{ t: 'Der Zug ist günstiger als das Flugzeug.', en: 'The train is cheaper than the plane.' }],
+      },
+      {
+        title: 'Word order after wenn',
+        body: 'Wenn (if, when) sends its verb to the end of the clause, and the main clause then starts with its verb.',
+        examples: [{ t: 'Wenn du Zeit hast, können wir uns treffen.', en: 'If you have time, we can meet.' }],
+      },
+    ],
+    u7: [
+      {
+        title: 'Formal requests',
+        body: 'Könnten Sie…? is the polite way to ask for something at work. Kannst du…? is fine with colleagues you call du.',
+      },
+      {
+        title: 'Workplace words',
+        body: 'Eine Besprechung is a meeting, das Protokoll is the written notes of it, and eine Frist is a deadline. Many offices also say Meeting and Deadline.',
+      },
+    ],
+    u8: [
+      {
+        title: 'Man for “people in general”',
+        body: 'Man takes the same verb form as er and gives a general statement: Man sollte… means “we should” or “one should”.',
+      },
+      {
+        title: 'Obwohl and the verb at the end',
+        body: 'Like wenn and weil, obwohl (although) sends the verb to the end of its clause.',
+        examples: [{ t: 'Obwohl es teuer ist, ist es notwendig.', en: 'Although it is expensive, it is necessary.' }],
+      },
+      {
+        title: 'Long compound nouns',
+        body: 'German builds new nouns by joining words, and the last part decides the gender: der Ressourcenverbrauch (resource consumption), die Hafenstadt (port city).',
+      },
+    ],
+    u9: [
+      {
+        title: 'Zwar … aber',
+        body: 'Zwar … aber concedes a point before a counterpoint, like “admittedly …, but”.',
+        examples: [{ t: 'Die Idee ist zwar gut, aber zu teuer.', en: 'Admittedly the idea is good, but it is too expensive.' }],
+      },
+      {
+        title: 'Softening disagreement',
+        body: 'Phrases such as Ich sehe das etwas anders (I see it a little differently) or Da bin ich mir nicht sicher (I’m not sure about that) disagree without sounding blunt.',
+      },
+    ],
+    u10: [
+      {
+        title: 'Spielen for settings',
+        body: 'A story spielt in a place or time: Der Roman spielt in Hamburg. Erzählen von means to tell the story of.',
+      },
+      {
+        title: 'The passive with werden',
+        body: 'Formal German often uses the passive: wurde + participle. Der Vorschlag wurde angenommen means “the proposal was accepted”.',
+      },
+      {
+        title: 'Sich um etwas kümmern',
+        body: 'Ich kümmere mich darum means “I’ll take care of it”, a useful promise at work.',
+      },
+    ],
+  },
+  ja: {
+    u1: [
+      {
+        title: 'Three scripts',
+        body: 'Japanese uses hiragana for grammar and native words, katakana for foreign words (コーヒー, coffee), and kanji for most nouns and verb stems. Start with hiragana: every symbol is one syllable.',
+        examples: [{ t: 'あ い う え お', en: 'a i u e o', roman: 'a i u e o' }],
+      },
+      {
+        title: 'The odd ones out',
+        body: 'Most symbols are a consonant plus a vowel, but some differ from the pattern: し is shi, ち is chi and つ is tsu. ん is a sound on its own.',
+      },
+      {
+        title: 'Two small marks',
+        body: 'Two small strokes (゛) make a sound voiced: か ka becomes が ga, さ sa becomes ざ za. A small circle (゜) turns h into p: は ha becomes ぱ pa.',
+        examples: [{ t: 'か → が, は → ぱ', en: 'ka → ga, ha → pa', roman: 'ka → ga, ha → pa' }],
+      },
+    ],
+    u2: [
+      {
+        title: 'は is read “wa”',
+        body: 'When は marks the topic of a sentence, it is pronounced wa, not ha. わたし は … means “As for me, …”.',
+        examples: [{ t: 'わたし は 学生 です。', en: 'I am a student.', roman: 'watashi wa gakusei desu.' }],
+      },
+      {
+        title: 'です makes it polite',
+        body: 'です (desu) works like “is / am / are” and keeps the sentence polite. The final u is usually barely pronounced: “dess”.',
+      },
+      {
+        title: 'Names and さん',
+        body: 'Add さん after other people’s names, never your own. Japanese often leaves out “I” and “you” when they are obvious.',
+        examples: [{ t: 'ケン さん は 友だち です。', en: 'Ken is a friend.', roman: 'Ken san wa tomodachi desu.' }],
+      },
+    ],
+    u3: [
+      {
+        title: 'Verb at the end, を for the object',
+        body: 'Japanese word order is subject – object – verb. を (pronounced o) marks the thing you eat, drink or read.',
+        examples: [{ t: '水 を 飲みます。', en: 'I drink water.', roman: 'mizu o nomimasu.' }],
+      },
+      {
+        title: 'Asking for things',
+        body: 'Noun + を ください means “please give me…”, the easiest way to order. Adding お, as in お茶, makes a word sound polite and gentle.',
+        examples: [{ t: 'お茶 を ください。', en: 'Tea, please.', roman: 'ocha o kudasai.' }],
+      },
+      {
+        title: 'No “a” or “the”, and no plurals',
+        body: 'Japanese has no articles and rarely marks plurals: りんご can be an apple, the apple or apples. Context decides.',
+      },
+    ],
+    u4: [
+      {
+        title: 'My family, your family',
+        body: 'Use plain words for your own family (母, 父, 兄, 姉) and polite ones for someone else’s (お母さん, お父さん, お兄さん, お姉さん).',
+        examples: [{ t: 'こちら は 姉 です。', en: 'This is my older sister.', roman: 'kochira wa ane desu.' }],
+      },
+      {
+        title: 'います and あります',
+        body: 'Both mean “there is / to have”. Use います for people and animals, and あります for things.',
+        examples: [
+          { t: 'ねこ が います。', en: 'There is a cat.', roman: 'neko ga imasu.' },
+          { t: '本 が あります。', en: 'There is a book.', roman: 'hon ga arimasu.' },
+        ],
+      },
+      {
+        title: 'この, その, あの',
+        body: 'この is “this” (near me), その is “that” (near you), and あの is “that over there”. They always come before a noun.',
+      },
+    ],
+    u5: [
+      {
+        title: 'Polite past: -ました',
+        body: 'Change -ます to -ました for the past: 行きます (go) becomes 行きました (went).',
+        examples: [{ t: '博物館 に 行きました。', en: 'I went to a museum.', roman: 'hakubutsukan ni ikimashita.' }],
+      },
+      {
+        title: 'に for time and destination, で for means',
+        body: 'に marks a clock time (七時 に, at seven) and where you go (会社 に, to work). で marks how you get there (電車 で, by train).',
+      },
+    ],
+    u6: [
+      {
+        title: 'Shall we? Let’s!',
+        body: '-ませんか (won’t we?) is a gentle invitation; -ましょう means “let’s”.',
+        examples: [
+          { t: '七時 に 会いませんか。', en: 'Shall we meet at seven?', roman: 'shichiji ni aimasen ka.' },
+          { t: '予約 しましょう。', en: 'Let’s make a reservation.', roman: 'yoyaku shimashō.' },
+        ],
+      },
+      {
+        title: 'と思います softens an opinion',
+        body: 'Ending with と思います (I think that…) makes a statement sound less direct, which Japanese speakers often prefer.',
+      },
+      {
+        title: 'Comparing with より',
+        body: 'A の ほう が B より … means “A is more … than B”.',
+        examples: [{ t: '電車 の ほう が 車 より 便利 です。', en: 'The train is more convenient than the car.', roman: 'densha no hō ga kuruma yori benri desu.' }],
+      },
+    ],
+    u7: [
+      {
+        title: 'Asking a favour',
+        body: 'Verb in the -て form + くれますか asks a colleague to do something for you. いただけますか is more polite, for customers or senior people.',
+        examples: [{ t: '送って いただけます か？', en: 'Could you send it?', roman: 'okutte itadakemasu ka?' }],
+      },
+      {
+        title: 'Honorific words',
+        body: 'Some words have special polite forms at work: お客様 (customer), ご提案 (your proposal). The prefixes お and ご show respect.',
+      },
+    ],
+    u8: [
+      {
+        title: 'べきです: should',
+        body: 'Dictionary-form verb + べき です means “should”. It is fairly strong; と思います after it softens it.',
+        examples: [{ t: 'もっと 予算 を 使う べき です。', en: 'We should spend more budget.', roman: 'motto yosan o tsukau beki desu.' }],
+      },
+      {
+        title: 'Must: -なければなりません',
+        body: '減らさなければ なりません literally means “if we do not reduce, it will not do”, the formal way to say “we must reduce”.',
+      },
+    ],
+    u9: [
+      {
+        title: 'Agree first, then add',
+        body: 'Japanese discussions often acknowledge the other view before adding a point: お考え は 分かります が… (I understand your view, but…). が here means “but”.',
+      },
+      {
+        title: 'Indirect disagreement',
+        body: 'A flat いいえ can sound harsh. Phrases such as それは ちょっと… (that is a little…), left unfinished, signal polite disagreement.',
+        examples: [{ t: 'それ は ちょっと…', en: 'That’s a bit… (polite no)', roman: 'sore wa chotto…' }],
+      },
+    ],
+    u10: [
+      {
+        title: 'Formal speech: keigo',
+        body: 'Meetings use respectful language. されました is the honorific passive (“was done”), and ご提案 politely refers to someone else’s proposal.',
+      },
+      {
+        title: 'Talking about stories',
+        body: '舞台 (butai, stage) is the setting of a story, あらすじ is the plot summary, and 感動 しました means “I was moved”.',
       },
     ],
   },

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { initialProgress } from './progress';
+import { initialProgress, sessionHistoryOf } from './progress';
 import type { LessonRecord, Progress, RecallStats, SavedPhrase, WordReview } from './progress';
 
 type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -163,8 +163,9 @@ export function parseCloudProgress(value: unknown): Progress | null {
   if (!isProgress(value)) return null;
   const defaults = initialProgress(Date.now());
   const present = Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
-  return { ...defaults, ...present } as Progress;
+  return { ...defaults, ...present, sessionHistory: sessionHistoryOf(value.sessionHistory) } as Progress;
 }
+
 
 export type CloudSave = { progress: Progress; updatedAt: string };
 

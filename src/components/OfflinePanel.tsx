@@ -82,7 +82,7 @@ function progressText(progress: SpeechProgress | null): string {
   return 'Preparing the speech engine…';
 }
 
-const BUILT_IN_LANGUAGES: VoiceLanguage[] = ['fr', 'es', 'hi'];
+const BUILT_IN_LANGUAGES: VoiceLanguage[] = ['fr', 'es', 'hi', 'de'];
 
 /** One language's built-in voice: its status, with download and remove buttons. */
 function BuiltInVoiceRow({ course, language, online }: { course: Course; language: VoiceLanguage; online: boolean }) {

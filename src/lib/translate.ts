@@ -1,4 +1,4 @@
-export type TranslationLanguage = 'en' | 'es' | 'fr' | 'hi';
+export type TranslationLanguage = 'en' | 'es' | 'fr' | 'hi' | 'de' | 'ja';
 
 type TranslationResponse = {
   responseStatus: number;

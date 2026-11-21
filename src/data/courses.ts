@@ -1,13 +1,18 @@
-import type { Course, LearningLevel, LearningReason, Lesson, Mission, Unit } from '../types';
+import type { Course, LearningLevel, LearningReason, Lesson, Mission, Story, Unit } from '../types';
 import { spanish } from './courses/es';
 import { french } from './courses/fr';
 import { hindi } from './courses/hi';
+import { german } from './courses/de';
+import { japanese } from './courses/ja';
+import { CULTURE_NOTES } from './culture';
 import { MISSIONS } from './missions';
+import { EVERYDAY_MISSIONS } from './missions-everyday';
 import { USAGE_NOTES } from './notes';
+import { STORIES } from './stories';
 
 /**
  * Course ids are prefixed onto unit, lesson and mission ids so progress never collides between courses.
- * Usage notes and missions live in their own files (for easier review) and are attached here.
+ * Usage notes, missions, stories and culture notes live in their own files (for easier review) and are attached here.
  */
 function withPrefixedIds(c: Course): Course {
   return {
@@ -18,15 +23,21 @@ function withPrefixedIds(c: Course): Course {
       notes: u.notes ?? USAGE_NOTES[c.id]?.[u.id],
       lessons: u.lessons.map((l) => ({ ...l, id: `${c.id}-${l.id}` })),
     })),
-    missions: (c.missions ?? MISSIONS[c.id] ?? []).map((m) => ({
+    missions: (c.missions ?? [...(MISSIONS[c.id] ?? []), ...(EVERYDAY_MISSIONS[c.id] ?? [])]).map((m) => ({
       ...m,
       id: `${c.id}-${m.id}`,
       afterUnit: `${c.id}-${m.afterUnit}`,
     })),
+    stories: (c.stories ?? STORIES[c.id] ?? []).map((s) => ({
+      ...s,
+      id: `${c.id}-story-${s.id}`,
+      afterUnit: `${c.id}-${s.afterUnit}`,
+    })),
+    culture: c.culture ?? CULTURE_NOTES[c.id] ?? [],
   };
 }
 
-export const COURSES: Course[] = [spanish, french, hindi].map(withPrefixedIds);
+export const COURSES: Course[] = [spanish, french, hindi, german, japanese].map(withPrefixedIds);
 
 export const LEARNING_REASONS: { id: LearningReason; label: string; hint: string; emoji: string }[] = [
   { id: 'travel', label: 'Travel', hint: 'Get around, eat out and ask for help', emoji: '🧳' },
@@ -46,6 +57,10 @@ export function missionsFor(course: Course, reason: LearningReason | null): Miss
 
 export function findMission(course: Course, id: string): Mission | undefined {
   return course.missions?.find((m) => m.id === id);
+}
+
+export function findStory(course: Course, id: string): Story | undefined {
+  return course.stories?.find((s) => s.id === id);
 }
 export const LEARNING_LEVELS: LearningLevel[] = ['beginner', 'intermediate', 'advanced'];
 export const LEVEL_INFO: Record<LearningLevel, { stage: string; title: string; description: string }> = {

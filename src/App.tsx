@@ -6,10 +6,11 @@ import { CoursePicker } from './components/CoursePicker';
 import { Home } from './components/Home';
 import { Lesson } from './components/Lesson';
 import { MissionScreen } from './components/MissionScreen';
+import { StoryScreen } from './components/StoryScreen';
 import { OutOfHearts } from './components/OutOfHearts';
 import { TopBar } from './components/TopBar';
 import { SpeechToast } from './components/ui';
-import { findLesson, findMission, getCourse, lessonsOf } from './data/courses';
+import { findLesson, findMission, findStory, getCourse, lessonsOf } from './data/courses';
 import { generateLesson, generatePractice, generateReview } from './lib/generate';
 import {
   currentStreak,
@@ -41,8 +42,8 @@ import {
   type SyncBase,
 } from './lib/sync';
 import { useOnline } from './lib/offline';
-import { hasVoice } from './lib/speech';
-import type { Exercise, SessionResult } from './types';
+import { hasVoice, recognitionSupported } from './lib/speech';
+import type { Exercise, SessionResult, TextSize } from './types';
 
 const TranslateScreen = lazy(() =>
   import('./components/TranslateScreen').then((module) => ({ default: module.TranslateScreen })),
@@ -54,6 +55,7 @@ type Screen =
   | { name: 'courses' }
   | { name: 'lesson'; run: number; lessonId?: string; practice: boolean; exercises: Exercise[] }
   | { name: 'mission'; run: number; missionId: string }
+  | { name: 'story'; run: number; storyId: string }
   | {
       name: 'complete';
       result: SessionResult;
@@ -66,6 +68,26 @@ type Screen =
   | { name: 'nohearts' };
 
 type Theme = 'light' | 'dark';
+const TEXT_SIZES: TextSize[] = ['normal', 'large', 'larger'];
+/** After “Can’t speak now”, speaking exercises stay off for this long. */
+const SPEAK_PAUSE_MS = 60 * 60 * 1000;
+const SPEAK_PAUSE_KEY = 'habla-speak-paused-until';
+
+function readStored(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // The setting still applies for this visit when storage is unavailable.
+  }
+}
 
 export default function App() {
   const [progress, setProgress] = useState(() => loadProgress(Date.now()));
@@ -76,6 +98,11 @@ export default function App() {
       return 'light';
     }
   });
+  const [textSize, setTextSize] = useState<TextSize>(() => {
+    const stored = readStored('habla-text-size');
+    return TEXT_SIZES.includes(stored as TextSize) ? (stored as TextSize) : 'normal';
+  });
+  const [speakPausedUntil, setSpeakPausedUntil] = useState(() => Number(readStored(SPEAK_PAUSE_KEY)) || 0);
   const [now, setNow] = useState(Date.now());
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [session, setSession] = useState<Session | null>(null);
@@ -238,8 +265,25 @@ export default function App() {
     }
   }, [theme]);
 
-  // Listening exercises only when sound is on and the browser can speak this language.
-  const genOpts = () => ({ speech: progress.sound && hasVoice(course.lang) });
+  useEffect(() => {
+    document.documentElement.dataset.textSize = textSize;
+    writeStored('habla-text-size', textSize);
+  }, [textSize]);
+
+  /**
+   * Listening exercises need sound and a voice for this language. Speaking exercises need sound, speech
+   * recognition, and the learner not to have said “Can’t speak now” in the last hour.
+   */
+  const genOpts = () => ({
+    speech: progress.sound && hasVoice(course.lang),
+    recognition: progress.sound && recognitionSupported && Date.now() >= speakPausedUntil,
+  });
+
+  const pauseSpeaking = () => {
+    const until = Date.now() + SPEAK_PAUSE_MS;
+    setSpeakPausedUntil(until);
+    writeStored(SPEAK_PAUSE_KEY, String(until));
+  };
 
   const startLesson = (lessonId: string) => {
     const lesson = findLesson(course, lessonId);
@@ -299,6 +343,11 @@ export default function App() {
     setScreen({ name: 'mission', run: Date.now(), missionId });
   };
 
+  const startStory = (storyId: string) => {
+    if (!findStory(course, storyId)) return;
+    setScreen({ name: 'story', run: Date.now(), storyId });
+  };
+
   const finish = (result: SessionResult) => {
     const t = Date.now();
     const xp = xpFor(result);
@@ -306,10 +355,12 @@ export default function App() {
     const xpBefore = todayXp(progress, t);
     let next = recordSession(
       progress,
-      { courseId: course.id, lessonId: result.lessonId, xp, accuracy: result.accuracy },
+      { courseId: course.id, lessonId: result.lessonId, xp, accuracy: result.accuracy, durationMs: result.durationMs },
       t,
     );
     if (result.missionId) next = recordMission(next, result.missionId, result.accuracy);
+    // Stories share the missions record (best accuracy and times completed, by id).
+    if (result.storyId) next = recordMission(next, result.storyId, result.accuracy);
     const heartBefore = regenHearts(next, t).hearts;
     if (result.practice) next = gainHeart(next, t);
     const streak = currentStreak(next, t);
@@ -392,17 +443,21 @@ export default function App() {
             syncError={syncError}
             theme={theme}
             onToggleTheme={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
+            textSize={textSize}
+            onTextSize={setTextSize}
           />
           <Home
             course={course}
             progress={progress}
             todayXp={todayXp(progress, now)}
+            now={now}
             dueReviewCount={dueWords(now).length}
             streak={streak}
             onStart={startLesson}
             onPractice={startPractice}
             onStartReview={startDueReview}
             onStartMission={startMission}
+            onStartStory={startStory}
             onSetDailyGoal={(goal) => setProgress((p) => ({ ...p, dailyGoal: goal }))}
             onSetGoal={(reason, goal) => setProgress((p) => ({ ...p, learningReason: reason, dailyGoal: goal }))}
             onToggleRoman={toggleRoman}
@@ -444,6 +499,7 @@ export default function App() {
           onExit={() => setScreen({ name: 'home' })}
           onFinish={finish}
           onOutOfHearts={() => setScreen({ name: 'nohearts' })}
+          onSkipSpeaking={pauseSpeaking}
         />
       )}
 
@@ -461,6 +517,25 @@ export default function App() {
             userId={session?.user.id ?? null}
             onToggleRoman={toggleRoman}
             onTogglePhrase={togglePhrase}
+            onExit={() => setScreen({ name: 'home' })}
+            onFinish={finish}
+          />
+        );
+      })()}
+
+      {screen.name === 'story' && (() => {
+        const story = findStory(course, screen.storyId);
+        if (!story) return null;
+        return (
+          <StoryScreen
+            key={screen.run}
+            course={course}
+            story={story}
+            sound={progress.sound}
+            showRoman={progress.showRoman}
+            savedPhrases={progress.savedPhrases}
+            userId={session?.user.id ?? null}
+            onToggleRoman={toggleRoman}
             onExit={() => setScreen({ name: 'home' })}
             onFinish={finish}
           />

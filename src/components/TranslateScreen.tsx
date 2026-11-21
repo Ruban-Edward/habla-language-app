@@ -26,6 +26,8 @@ function courseLanguage(course: Course): TranslationLanguage {
     case 'es': return 'es';
     case 'fr': return 'fr';
     case 'hi': return 'hi';
+    case 'de': return 'de';
+    case 'ja': return 'ja';
     default: throw new Error(`Unsupported course language: ${course.id}`);
   }
 }

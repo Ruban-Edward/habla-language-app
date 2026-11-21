@@ -13,12 +13,18 @@ export function shuffle<T>(items: T[]): T[] {
 
 const sample = <T,>(items: T[], n: number): T[] => shuffle(items).slice(0, n);
 
-export type GenerateOptions = { speech: boolean };
+export type GenerateOptions = {
+  /** The device can read this language aloud: adds listening exercises. */
+  speech: boolean;
+  /** The browser can recognise speech and the learner can talk now: adds speaking exercises. */
+  recognition?: boolean;
+};
 
 /** Shared context for building one session's exercises. */
 type Ctx = {
   course: Course;
   speech: boolean;
+  recognition: boolean;
   /** True when the words are script letters (sounds), not vocabulary. */
   script: boolean;
   /** Fallback distractor pool of the same kind (letters or words). */
@@ -41,6 +47,63 @@ function distractors(word: Word, pool: Word[], ctx: Ctx, n = 3): Word[] {
 }
 
 const roman = (ctx: Ctx, text: string) => (ctx.script ? undefined : romanize(text, ctx.course.glossary));
+
+/** Listen → repeat → check: the learner says a word out loud. */
+function speakWord(key: string, word: Word, ctx: Ctx): Exercise {
+  return {
+    kind: 'speak',
+    key,
+    instruction: 'Say this word',
+    prompt: word.t,
+    promptRoman: roman(ctx, word.t),
+    meaning: word.en,
+    accepted: [word.t],
+    reviewIds: [word.t],
+  };
+}
+
+/** The next step up from single words: the learner reads a whole sentence aloud. */
+function speakSentence(key: string, s: Sentence, ctx: Ctx): Exercise {
+  const accepted = expandAll(s.t);
+  return {
+    kind: 'speak',
+    key,
+    instruction: 'Say this sentence',
+    prompt: accepted[0],
+    promptRoman: roman(ctx, accepted[0]),
+    meaning: primary(s.en),
+    accepted,
+  };
+}
+
+function listenChoice(key: string, word: Word, pool: Word[], ctx: Ctx): Exercise {
+  const options = shuffle([word, ...distractors(word, pool, ctx)]).map((w) => ({
+    label: w.t,
+    roman: roman(ctx, w.t),
+  }));
+  return {
+    kind: 'choice',
+    key,
+    instruction: 'Tap what you hear',
+    audio: word.t,
+    optionSide: 't',
+    options,
+    answer: word.t,
+    reviewIds: ctx.script ? [] : [word.t],
+  };
+}
+
+/**
+ * Every third new word gets an audio exercise. Listening comes first; once the learner can talk, every other
+ * one of those becomes a speaking exercise instead. Script letters are never spoken alone.
+ */
+function introExercise(key: string, w: Word, i: number, pool: Word[], ctx: Ctx): Exercise {
+  if (i % 3 !== 2) return meaningChoice(key, w, pool, ctx);
+  if (ctx.recognition && !ctx.script && i % 6 === 5) return speakWord(key, w, ctx);
+  if (ctx.speech) return listenChoice(key, w, pool, ctx);
+  if (ctx.recognition && !ctx.script) return speakWord(key, w, ctx);
+  return meaningChoice(key, w, pool, ctx);
+}
 
 function meaningChoice(key: string, word: Word, pool: Word[], ctx: Ctx): Exercise {
   const options = shuffle([word, ...distractors(word, pool, ctx)]).map((w) => ({
@@ -74,25 +137,10 @@ function soundChoice(key: string, word: Word, pool: Word[], ctx: Ctx): Exercise 
   };
 }
 
-function listenChoice(key: string, word: Word, pool: Word[], ctx: Ctx): Exercise {
-  const options = shuffle([word, ...distractors(word, pool, ctx)]).map((w) => ({
-    label: w.t,
-    roman: roman(ctx, w.t),
-  }));
-  return {
-    kind: 'choice',
-    key,
-    instruction: 'Tap what you hear',
-    audio: word.t,
-    optionSide: 't',
-    options,
-    answer: word.t,
-    reviewIds: ctx.script ? [] : [word.t],
-  };
-}
-
 function match(key: string, words: Word[], ctx: Ctx): Exercise {
-  const pairs = sample(words, Math.min(5, words.length)).map((w) => ({ t: w.t, en: w.en, roman: roman(ctx, w.t) }));
+  const selected = sample(words, Math.min(5, words.length));
+  while (selected.length < 4 && words.length) selected.push(words[selected.length % words.length]);
+  const pairs = selected.map((w) => ({ t: w.t, en: w.en, roman: roman(ctx, w.t) }));
   return {
     kind: 'match',
     key,
@@ -168,6 +216,11 @@ function sentenceExercise(key: string, s: Sentence, kind: SentenceKind, pool: Se
   };
 }
 
+/** Shorter sentences are kinder to read aloud and to speech recognition. */
+function shortest(sentences: Sentence[]): Sentence {
+  return sentences.reduce((best, s) => (primary(s.t).length < primary(best.t).length ? s : best));
+}
+
 function sentenceKinds(ctx: Ctx): SentenceKind[] {
   const toTarget: SentenceKind = ctx.course.typeInTarget ? 'type-en-t' : 'tiles-en-t';
   return ['tiles-t-en', 'tiles-en-t', ctx.speech ? 'listen' : toTarget, 'type-t-en'];
@@ -177,15 +230,13 @@ function sentenceKinds(ctx: Ctx): SentenceKind[] {
 export function generateLesson(course: Course, lesson: Lesson, opts: GenerateOptions): Exercise[] {
   const unit = unitOf(course, lesson.id);
   const script = lesson.kind === 'script';
-  const ctx: Ctx = { course, speech: opts.speech, script, fallback: wordsOfKind(course, script) };
+  const ctx: Ctx = { course, speech: opts.speech, recognition: !!opts.recognition, script, fallback: wordsOfKind(course, script) };
   // Script lessons only quiz letters taught in this lesson; vocabulary draws distractors from the unit.
   const wordPool = script ? lesson.words : unit.lessons.filter((l) => l.kind !== 'script').flatMap((l) => l.words);
   let n = 0;
   const key = () => `${lesson.id}-${n++}`;
 
-  const intro = shuffle(lesson.words).map((w, i) =>
-    opts.speech && i % 3 === 2 ? listenChoice(key(), w, wordPool, ctx) : meaningChoice(key(), w, wordPool, ctx),
-  );
+  const intro = shuffle(lesson.words).map((w, i) => introExercise(key(), w, i, wordPool, ctx));
   const head = [...intro.slice(0, 3), match(key(), lesson.words, ctx), ...intro.slice(3)];
 
   if (script) {
@@ -193,10 +244,10 @@ export function generateLesson(course: Course, lesson: Lesson, opts: GenerateOpt
   }
   const sentencePool = unit.lessons.flatMap((l) => l.sentences);
   const kinds = sentenceKinds(ctx);
-  const sentences = shuffle(lesson.sentences).map((s, i) =>
-    sentenceExercise(key(), s, kinds[i % kinds.length], sentencePool, ctx),
-  );
-  return [...head, ...sentences];
+  const ordered = shuffle(lesson.sentences);
+  const sentences = ordered.map((s, i) => sentenceExercise(key(), s, kinds[i % kinds.length], sentencePool, ctx));
+  const spoken = ctx.recognition && ordered.length ? [speakSentence(key(), shortest(ordered), ctx)] : [];
+  return [...head, ...sentences, ...spoken];
 }
 
 /** A mixed review over the given lessons of one course. */
@@ -204,7 +255,7 @@ export function generatePractice(course: Course, lessons: Lesson[], opts: Genera
   const vocab = lessons.filter((l) => l.kind !== 'script');
   const script = vocab.length === 0;
   const source = script ? lessons : vocab;
-  const ctx: Ctx = { course, speech: opts.speech, script, fallback: wordsOfKind(course, script) };
+  const ctx: Ctx = { course, speech: opts.speech, recognition: !!opts.recognition, script, fallback: wordsOfKind(course, script) };
   const words = sample(
     source.flatMap((l) => l.words),
     6,
@@ -215,6 +266,7 @@ export function generatePractice(course: Course, lessons: Lesson[], opts: Genera
     meaningChoice(key(), words[0], words, ctx),
     opts.speech ? listenChoice(key(), words[1], words, ctx) : meaningChoice(key(), words[1], words, ctx),
     match(key(), words, ctx),
+    ...(ctx.recognition && !script ? [speakWord(key(), words[2], ctx)] : []),
   ];
 
   if (script) return [...head, ...words.slice(2, 6).map((w) => soundChoice(key(), w, words, ctx))];
@@ -230,10 +282,11 @@ export function generatePractice(course: Course, lessons: Lesson[], opts: Genera
 
 /** Create a short, word-focused session from vocabulary whose review date has arrived. */
 export function generateReview(course: Course, words: Word[], opts: GenerateOptions): Exercise[] {
-  const ctx: Ctx = { course, speech: opts.speech, script: false, fallback: wordsOfKind(course, false) };
-  return shuffle(words).slice(0, 8).map((word, i) =>
-    opts.speech && i % 2 === 1
-      ? listenChoice(`review-${i}`, word, ctx.fallback, ctx)
-      : meaningChoice(`review-${i}`, word, ctx.fallback, ctx),
-  );
+  const ctx: Ctx = { course, speech: opts.speech, recognition: !!opts.recognition, script: false, fallback: wordsOfKind(course, false) };
+  return shuffle(words).slice(0, 8).map((word, i) => {
+    const key = `review-${i}`;
+    if (ctx.recognition && i % 4 === 3) return speakWord(key, word, ctx);
+    if (ctx.speech && i % 2 === 1) return listenChoice(key, word, ctx.fallback, ctx);
+    return meaningChoice(key, word, ctx.fallback, ctx);
+  });
 }

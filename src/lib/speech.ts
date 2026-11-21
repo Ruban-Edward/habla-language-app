@@ -1,6 +1,8 @@
 export const speechSupported =
   typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
+export const recognitionSupported = typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
 export type SpeechResult =
   | { ok: true; warning?: string }
   | { ok: false; reason: 'unsupported' | 'voice-missing' | 'playback-failed' | 'model-load-failed'; message?: string };
@@ -14,7 +16,7 @@ export type SpeechProgress =
 /* ---------- Built-in voices ---------- */
 
 /** Languages with a built-in voice that runs on the device (Piper text-to-speech models). */
-export type VoiceLanguage = 'fr' | 'es' | 'hi';
+export type VoiceLanguage = 'fr' | 'es' | 'hi' | 'de';
 
 type PiperVoiceConfig = {
   audio: { sample_rate: number };
@@ -77,6 +79,17 @@ const VOICES: Record<VoiceLanguage, VoiceSpec> = {
       return (text) => encodeSentences(phonemizeSpanish(text), config);
     },
   },
+  de: {
+    name: 'German',
+    modelUrl: `${PIPER_VOICES}/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx`,
+    configUrl: `${PIPER_VOICES}/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json`,
+    sizeBytes: 63_221_984,
+    cacheName: 'habla-voice-de-v1',
+    createEncoder: async (config) => {
+      const { phonemizeGerman } = await import('./g2p/german');
+      return (text) => encodeSentences(phonemizeGerman(text), config);
+    },
+  },
   hi: {
     name: 'Hindi',
     modelUrl: `${PIPER_VOICES}/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx`,
@@ -106,7 +119,7 @@ export const SPEECH_ENGINE_MB = 15;
 /** The built-in voice for a BCP-47 tag such as `es-ES`, if there is one. */
 export function builtInVoiceLanguage(lang: string): VoiceLanguage | null {
   const prefix = lang.toLowerCase().split(/[-_]/)[0];
-  return prefix === 'fr' || prefix === 'es' || prefix === 'hi' ? prefix : null;
+  return prefix === 'fr' || prefix === 'es' || prefix === 'hi' || prefix === 'de' ? prefix : null;
 }
 
 const runtimes = new Map<VoiceLanguage, Promise<VoiceRuntime>>();

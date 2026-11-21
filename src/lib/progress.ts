@@ -26,6 +26,10 @@ export type SavedPhrase = {
 };
 export type PhraseDraft = Omit<SavedPhrase, 'id' | 'createdAt'>;
 export type RecallStats = { attempts: number; correct: number };
+/** One finished lesson, practice, mission or story. `at` (ms) identifies it when merging devices. */
+export type SessionStat = { at: number; courseId: string; date: string; accuracy: number; durationMs: number; xp: number };
+/** How many recent sessions are kept for the progress dashboard. */
+export const SESSION_HISTORY_LIMIT = 200;
 
 export type Progress = {
   xp: number;
@@ -47,11 +51,14 @@ export type Progress = {
   showRoman: boolean;
   /** Why the learner is studying; null until they choose. */
   learningReason: LearningReason | null;
+  /** Best results for missions and mini-stories, by their id. */
   missions: Record<string, LessonRecord>;
   /** Per course: answers given a week or more after the learner last saw the word. */
   recall: Record<string, RecallStats>;
   /** When all progress was last reset (0 if never), so a reset isn't undone by syncing older data. */
   resetAt: number;
+  /** Recent sessions, oldest first, for the progress dashboard. */
+  sessionHistory: SessionStat[];
 };
 
 export function initialProgress(now: number): Progress {
@@ -74,6 +81,7 @@ export function initialProgress(now: number): Progress {
     missions: {},
     recall: {},
     resetAt: 0,
+    sessionHistory: [],
   };
 }
 
@@ -198,7 +206,7 @@ export function todayXp(p: Progress, now: number): number {
 
 export function recordSession(
   p: Progress,
-  s: { courseId: string; lessonId?: string; xp: number; accuracy: number },
+  s: { courseId: string; lessonId?: string; xp: number; accuracy: number; durationMs?: number },
   now: number,
 ): Progress {
   const today = dayKey(now);
@@ -222,20 +230,40 @@ export function recordSession(
     lastActiveDate: today,
     dailyXp: { ...p.dailyXp, [today]: (p.dailyXp[today] ?? 0) + s.xp },
     completed,
+    sessionHistory: [
+      ...p.sessionHistory,
+      { at: now, courseId: s.courseId, date: today, accuracy: s.accuracy, durationMs: s.durationMs ?? 0, xp: s.xp },
+    ].slice(-SESSION_HISTORY_LIMIT),
   };
 }
 
-export function xpFor(s: { practice: boolean; mistakes: number; missionId?: string }): number {
-  if (s.missionId) return 10 + (s.mistakes === 0 ? 5 : 0);
+export function xpFor(s: { practice: boolean; mistakes: number; missionId?: string; storyId?: string }): number {
+  if (s.missionId || s.storyId) return 10 + (s.mistakes === 0 ? 5 : 0);
   if (s.practice) return 5;
   return 10 + (s.mistakes === 0 ? 5 : 0);
+}
+
+/** Dashboard history is a nice-to-have, so malformed entries are dropped rather than rejecting the save. */
+export function sessionHistoryOf(value: unknown): SessionStat[] {
+  if (!Array.isArray(value)) return [];
+  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  return value.filter((s: any): s is SessionStat =>
+    typeof s === 'object' && s !== null &&
+    finite(s.at) &&
+    typeof s.courseId === 'string' &&
+    typeof s.date === 'string' &&
+    finite(s.accuracy) &&
+    finite(s.durationMs) &&
+    finite(s.xp),
+  );
 }
 
 export function loadProgress(now: number): Progress {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialProgress(now);
-    return migrate({ ...initialProgress(now), ...JSON.parse(raw) }, raw);
+    const saved = JSON.parse(raw);
+    return migrate({ ...initialProgress(now), ...saved, sessionHistory: sessionHistoryOf(saved.sessionHistory) }, raw);
   } catch {
     return initialProgress(now);
   }

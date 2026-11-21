@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findLesson, unitOf } from '../data/courses';
 import { checkExercise } from '../lib/check';
 import { sfx } from '../lib/sfx';
@@ -7,6 +7,7 @@ import { Choice } from './exercises/Choice';
 import { Match } from './exercises/Match';
 import { Tiles } from './exercises/Tiles';
 import { TypeAnswer } from './exercises/TypeAnswer';
+import { Speak } from './exercises/Speak';
 import { LessonPreview } from './LessonPreview';
 import { Mascot } from './Mascot';
 import { Modal } from './ui';
@@ -30,6 +31,12 @@ type Props = {
   onExit: () => void;
   onFinish: (r: SessionResult) => void;
   onOutOfHearts: () => void;
+  /** The learner can't talk right now: speaking exercises pause for a while. */
+  onSkipSpeaking?: () => void;
+  /** Label in the header instead of “Practice” (for example “Story”). */
+  badge?: string;
+  /** Shown above every exercise, such as the story being asked about. */
+  context?: ReactNode;
 };
 
 const PRAISE = ['Nice!', 'Great job!', 'Correct!', 'You got it!'];
@@ -52,6 +59,9 @@ export function Lesson(props: Props) {
     onExit,
     onFinish,
     onOutOfHearts,
+    onSkipSpeaking,
+    badge,
+    context,
   } = props;
   const lesson = lessonId ? findLesson(course, lessonId) : undefined;
   const [showPreview, setShowPreview] = useState(!practice && !!lesson?.words.length);
@@ -64,11 +74,12 @@ export function Lesson(props: Props) {
   const [correctCount, setCorrectCount] = useState(0);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [outOfHearts, setOutOfHearts] = useState(false);
+  // Exercises that count toward the progress bar and accuracy; skipped speaking exercises are taken out.
+  const [total, setTotal] = useState(exercises.length);
   const startedAt = useRef(Date.now());
   const reviewedWords = useRef(new Set<string>());
 
   const current = queue[index];
-  const total = exercises.length;
   const isRetry = current.key.includes('~');
 
   const check = useCallback(() => {
@@ -92,27 +103,42 @@ export function Lesson(props: Props) {
     }
   }, [answer, current, onReview, onWrong, practice, result, sound]);
 
+  const finish = useCallback((counted: number) => {
+    if (sound) sfx.complete();
+    onFinish({
+      practice,
+      lessonId,
+      mistakes,
+      accuracy: counted + mistakes > 0 ? Math.round((100 * counted) / (counted + mistakes)) : 100,
+      durationMs: Date.now() - startedAt.current,
+    });
+  }, [lessonId, mistakes, onFinish, practice, sound]);
+
   const next = useCallback(() => {
     if (!result) return;
     if (!practice && !result.correct && hearts <= 0) {
       setOutOfHearts(true);
       return;
     }
-    if (index + 1 >= queue.length) {
-      if (sound) sfx.complete();
-      onFinish({
-        practice,
-        lessonId,
-        mistakes,
-        accuracy: Math.round((100 * total) / (total + mistakes)),
-        durationMs: Date.now() - startedAt.current,
-      });
-      return;
-    }
+    if (index + 1 >= queue.length) return finish(total);
     setIndex((i) => i + 1);
     setAnswer(null);
     setResult(null);
-  }, [hearts, index, lessonId, mistakes, onFinish, practice, queue.length, result, sound, total]);
+  }, [finish, hearts, index, practice, queue.length, result, total]);
+
+  /** Drop this and every later speaking exercise, with no mistake recorded. */
+  const skipSpeaking = () => {
+    const later = queue.slice(index);
+    const kept = later.filter((exercise) => exercise.kind !== 'speak');
+    const removed = later.filter((exercise) => exercise.kind === 'speak' && !exercise.key.includes('~')).length;
+    const nextTotal = total - removed;
+    onSkipSpeaking?.();
+    setTotal(nextTotal);
+    if (!kept.length) return finish(nextTotal);
+    setQueue([...queue.slice(0, index), ...kept]);
+    setAnswer(null);
+    setResult(null);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -143,13 +169,13 @@ export function Lesson(props: Props) {
           aria-label={showPreview ? 'Lesson introduction' : 'Lesson progress'}
           aria-valuemin={0}
           aria-valuemax={total}
-          aria-valuenow={showPreview ? 0 : correctCount}
+          aria-valuenow={showPreview ? 0 : Math.min(correctCount, total)}
         >
-          <span style={{ width: `${showPreview ? 0 : (100 * correctCount) / total}%` }} />
+          <span style={{ width: `${showPreview ? 0 : Math.min(100, (100 * correctCount) / Math.max(1, total))}%` }} />
         </div>
         {course.glossary && <RomanToggle compact shown={showRoman} onToggle={onToggleRoman} />}
         {practice ? (
-          <span className="badge">Practice</span>
+          <span className="badge">{badge ?? 'Practice'}</span>
         ) : (
           <span className="stat stat-heart" aria-label={`${hearts} hearts`}>
             ❤️<b>{hearts}</b>
@@ -169,12 +195,14 @@ export function Lesson(props: Props) {
           />
         ) : (
           <>
+            {context}
             {isRetry && <p className="retry-tag">↻ Let's try that again</p>}
             <h2 className="instruction">{current.instruction}</h2>
             {current.kind === 'choice' && <Choice key={current.key} exercise={current} {...exerciseProps} />}
             {current.kind === 'tiles' && <Tiles key={current.key} exercise={current} {...exerciseProps} />}
             {current.kind === 'type' && <TypeAnswer key={current.key} exercise={current} {...exerciseProps} />}
             {current.kind === 'match' && <Match key={current.key} exercise={current} {...exerciseProps} />}
+            {current.kind === 'speak' && <Speak key={current.key} exercise={current} {...exerciseProps} />}
           </>
         )}
       </main>
@@ -204,6 +232,11 @@ export function Lesson(props: Props) {
                   </>
                 )}
               </div>
+              {current.kind === 'speak' && !result && (
+                <button type="button" className="btn ghost skip-speaking" onClick={skipSpeaking}>
+                  Can’t speak now
+                </button>
+              )}
               <button
                 type="button"
                 className={`btn ${result && !result.correct ? 'danger' : 'primary'}`}

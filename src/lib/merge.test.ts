@@ -70,7 +70,15 @@ describe('mergeProgress', () => {
     expect(mergeProgress({ ...base, course: 'fr' }, { ...base, course: null }, null).course).toBe('fr');
   });
 
-  it('merges missions like lessons', () => {
+  it('keeps dashboard history from both devices without duplicates', () => {
+    const phone = lesson(base, 'es-u1l2', day(2));
+    const laptop = lesson(base, 'es-u1l3', day(3), 80);
+    const merged = mergeProgress(phone, laptop, base);
+    expect(merged.sessionHistory.map((s) => s.date)).toEqual(['2025-01-01', '2025-01-02', '2025-01-03']);
+    expect(mergeProgress(merged, merged, merged).sessionHistory).toHaveLength(3);
+  });
+
+    it('merges missions like lessons', () => {
     const phone = recordMission(base, 'es-cafe', 75);
     const laptop = recordMission(base, 'es-cafe', 100);
     expect(mergeProgress(phone, laptop, base).missions['es-cafe']).toEqual({ times: 2, bestAccuracy: 100 });

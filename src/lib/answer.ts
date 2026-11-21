@@ -47,10 +47,15 @@ export function normalize(s: string, keepAccents = false): string {
     .toLowerCase()
     .replace(/[’‘`´]/g, "'")
     .replace(/œ/g, 'oe')
-    .replace(/[¿¡?!.,;:"«»…\-–—।]/g, ' ');
-  if (!keepAccents) t = t.normalize('NFD').replace(/[̀-ͯ]/g, '');
-  return t.replace(/\s+/g, ' ').trim();
+    .replace(/[¿¡?!.,;:"«»…\-–—।。、？！「」『』・]/g, ' ');
+  if (!keepAccents) t = t.normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC');
+  t = t.replace(/\s+/g, ' ').trim();
+  // Japanese is written without spaces; course sentences add them only to make answer tiles.
+  return CJK.test(t) ? t.replace(/ /g, '') : t;
 }
+
+/** Japanese kana and kanji. */
+const CJK = /[\u3040-\u30ff\u3400-\u9fff]/;
 
 export function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
@@ -89,9 +94,28 @@ export function checkText(input: string, accepted: string[], opts: { typos: bool
   return { correct: false, answer };
 }
 
+/**
+ * Check what speech recognition heard. Accents and punctuation never count (the recogniser chooses them, not
+ * the learner), and a near miss is allowed in proportion to length: one letter in a short word, about one in
+ * seven in a sentence, since recognisers often mishear a single sound.
+ */
+export function checkSpeech(heard: string, accepted: string[]): CheckResult {
+  const answer = accepted[0];
+  const loose = normalize(heard);
+  if (!loose) return { correct: false, answer };
+  if (accepted.some((a) => normalize(a) === loose)) return { correct: true, answer };
+  const close = accepted.find((a) => {
+    const target = normalize(a);
+    const allowed = target.length < 4 ? 0 : Math.max(1, Math.floor(target.length / 7));
+    return levenshtein(target, loose) <= allowed;
+  });
+  if (close) return { correct: true, answer, note: `Very close. It sounded like “${heard}”.` };
+  return { correct: false, answer, note: `It sounded like “${heard}”.` };
+}
+
 /** Split a sentence into word tiles. The first word is lower-cased unless it's "I". */
 export function toTiles(sentence: string): string[] {
-  const words = sentence.replace(/[¿¡?!.,;:"।]/g, '').split(/\s+/).filter(Boolean);
+  const words = sentence.replace(/[¿¡?!.,;:"।。、？！「」]/g, '').split(/\s+/).filter(Boolean);
   return words.map((w, i) => (i === 0 && !/^I($|')/.test(w) ? w.toLowerCase() : w));
 }
 

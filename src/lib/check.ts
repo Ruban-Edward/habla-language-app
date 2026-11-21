@@ -1,5 +1,5 @@
 import type { CheckResult, Exercise } from '../types';
-import { checkText, toTiles } from './answer';
+import { checkSpeech, checkText, toTiles } from './answer';
 
 export function checkExercise(ex: Exercise, answer: string): CheckResult {
   switch (ex.kind) {
@@ -18,6 +18,8 @@ export function checkExercise(ex: Exercise, answer: string): CheckResult {
     }
     case 'type':
       return checkText(answer, ex.accepted, { typos: true });
+    case 'speak':
+      return checkSpeech(answer, ex.accepted);
     case 'match':
       return { correct: true, answer: '' };
   }

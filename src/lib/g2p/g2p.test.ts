@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { COURSES } from '../../data/courses';
 import { encodeEspeakPhonemes } from '../speech';
+import { germanNumber, phonemizeGerman } from './german';
 import { phonemizeHindi } from './hindi';
 import { phonemizeSpanish, spanishNumber } from './spanish';
 
-/** Single-codepoint symbols in the Spanish (davefx) and Hindi (rohan) voices' phoneme maps. */
+/** Single-codepoint symbols in the Spanish (davefx), Hindi (rohan) and German (thorsten) voices' phoneme maps. */
 const VOICE_SYMBOLS =
   '_^$ !\'(),-.:;?abcdefhijklmnopqrstuvwxyzæçðøħŋœǀǁǂǃɐɑɒɓɔɕɖɗɘəɚɛɜɞɟɠɡɢɣɤɥɦɧɨɪɫɬɭɮɯɰɱɲɳɴɵɶɸɹɺɻɽɾʀʁʂʃʄʈʉʊʋʌʍʎʏʐʑʒʔʕʘʙʛʜʝʟʡʢʲˈˌːˑ˞βθχᵻⱱ0123456789̧̪̯̩̃ʰˤε↓#"↑̺̻gʦ X̝̊ɝʷ';
 const voiceMap: Record<string, number[]> = Object.fromEntries([...VOICE_SYMBOLS].map((symbol, index) => [symbol, [index]]));
@@ -105,6 +106,54 @@ describe('Hindi phonemes', () => {
   it('uses only symbols the Hindi voice knows for every course text', () => {
     for (const text of courseTexts('hi')) {
       const sentences = phonemizeHindi(text);
+      expect(sentences.length, text).toBeGreaterThan(0);
+      for (const sentence of sentences) expect(encodeEspeakPhonemes(sentence, { phoneme_id_map: voiceMap }).dropped, text).toEqual([]);
+    }
+  });
+});
+
+describe('German phonemes', () => {
+  // Standard German in eSpeak's notation (stress before the vowel, ɐ for vocalised r, ə for unstressed e).
+  // Written by hand: compare with eSpeak NG (`espeak-ng -v de -q --ipa`) when it is available.
+  it.each([
+    ['Hallo!', 'halˈoː'],
+    ['guten Abend', 'ɡˈuːtən ˈaːbənt'],
+    ['Ich heiße Paul.', 'ɪç hˈaɪsə pˈaʊl'],
+    ['Vater', 'fˈaːtɐ'],
+    ['Schwester', 'ʃvˈɛstɐ'],
+    ['Mann', 'mˈan'],
+    ['Straße', 'ʃtʁˈaːsə'],
+    ['Stadt', 'ʃtˈat'],
+    ['heute', 'hˈɔøtə'],
+    ['Nacht', 'nˈaxt'],
+    ['schlecht', 'ʃlˈɛçt'],
+    ['günstig', 'ɡˈʏnstɪç'],
+    ['Zug', 'tsˈuːk'],
+    ['Hund', 'hˈʊnt'],
+    ['Lösung', 'lˈøːzʊŋ'],
+    ['verschieben', 'fɛɐʃˈiːbən'],
+    ['Besprechung', 'bəʃpʁˈɛçʊŋ'],
+    ['ankommen', 'ˈankɔmən'],
+    ['finanzieren', 'finantsˈiːʁən'],
+    ['Werk', 'vˈɛʁk'],
+    ['freundlich', 'fʁˈɔøntlɪç'],
+  ])('%s → %s', (text, expected) => {
+    expect(withoutPunctuation(phonemizeGerman(text))).toBe(expected);
+  });
+
+  it('keeps clause punctuation and splits sentences the way Piper does', () => {
+    expect(phonemizeGerman('Hallo, wie geht’s? Gut.')).toEqual(['halˈoː, viː ɡˈeːts?', 'ɡˈuːt.']);
+  });
+
+  it('spells out numbers', () => {
+    expect(germanNumber(21)).toBe('einundzwanzig');
+    expect(germanNumber(1999)).toBe('eintausendneunhundertneunundneunzig');
+    expect(withoutPunctuation(phonemizeGerman('3'))).toBe(withoutPunctuation(phonemizeGerman('drei')));
+  });
+
+  it('uses only symbols the German voice knows for every course text', () => {
+    for (const text of courseTexts('de')) {
+      const sentences = phonemizeGerman(text);
       expect(sentences.length, text).toBeGreaterThan(0);
       for (const sentence of sentences) expect(encodeEspeakPhonemes(sentence, { phoneme_id_map: voiceMap }).dropped, text).toEqual([]);
     }

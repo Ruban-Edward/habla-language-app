@@ -3,7 +3,7 @@ import type { Mission } from '../types';
 /**
  * Real-life missions: short dialogues where the learner chooses (or types) a reply and gets a correction.
  * Keyed by course id. `afterUnit` is the unprefixed unit id whose vocabulary the mission builds on.
- * Each turn needs at least one correct reply and one reply with a correction; Hindi lines need `roman`.
+ * Each turn needs at least one correct reply and one reply with a correction; Hindi and Japanese lines need `roman`.
  */
 export const MISSIONS: Record<string, Mission[]> = {
   es: [
@@ -413,6 +413,261 @@ export const MISSIONS: Record<string, Mission[]> = {
           replies: [
             { t: 'बहुत धन्यवाद!', en: 'Thank you very much!', roman: 'bahut dhanyavaad!', correct: true, feedback: 'Warm and polite.' },
             { t: 'स्वागत है!', en: 'Welcome!', roman: 'svaagat hai!', correct: false, feedback: 'That repeats “welcome” back to her. Say thank you: बहुत धन्यवाद!' },
+          ],
+        },
+      ],
+    },
+  ],
+  de: [
+    {
+      id: 'cafe',
+      title: 'Order at a café',
+      emoji: '☕',
+      scenario: 'You walk up to the counter of a busy café in Berlin.',
+      afterUnit: 'u2',
+      reasons: ['travel', 'curious', 'people'],
+      turns: [
+        {
+          partner: { t: 'Hallo! Was darf es sein?', en: 'Hi! What would you like?' },
+          goal: 'Order a coffee politely.',
+          replies: [
+            { t: 'Einen Kaffee, bitte.', en: 'A coffee, please.', correct: true, feedback: 'Short and polite. Kaffee is masculine, so it becomes einen when you order it.' },
+            { t: 'Ich hätte gern einen Kaffee.', en: 'I’d like a coffee.', correct: true, feedback: 'Ich hätte gern is the polite way to order.' },
+            { t: 'Ich bin ein Kaffee.', en: 'I am a coffee.', correct: false, feedback: 'Ich bin means “I am”, so you just said you are a coffee. Say: Einen Kaffee, bitte.' },
+          ],
+        },
+        {
+          partner: { t: 'Mit Milch?', en: 'With milk?' },
+          goal: 'Say yes, with milk.',
+          replies: [
+            { t: 'Ja, mit Milch, bitte.', en: 'Yes, with milk, please.', correct: true, feedback: 'Clear and friendly.' },
+            { t: 'Nein, danke.', en: 'No, thanks.', correct: false, feedback: 'That turns the milk down. To say yes: Ja, mit Milch.' },
+            { t: 'Ja, Milch ist.', en: 'Yes, milk is.', correct: false, feedback: 'The word order is off. Simply answer: Ja, mit Milch.' },
+          ],
+        },
+        {
+          partner: { t: 'Zum Mitnehmen oder zum Hiertrinken?', en: 'To take away or to drink here?' },
+          goal: 'Say you’ll drink it here.',
+          replies: [
+            { t: 'Zum Hiertrinken, bitte.', en: 'To drink here, please.', correct: true, feedback: 'Echoing the question is the easy way to answer.' },
+            { t: 'Hier, bitte.', en: 'Here, please.', correct: true, feedback: 'Short and perfectly clear.' },
+            { t: 'Zum Mitnehmen, bitte.', en: 'To take away, please.', correct: false, feedback: 'Zum Mitnehmen means to take away. To stay: Zum Hiertrinken, or just Hier, bitte.' },
+          ],
+        },
+        {
+          partner: { t: 'Das macht drei Euro.', en: 'That’s three euros.' },
+          goal: 'Thank them and say goodbye.',
+          replies: [
+            { t: 'Danke, tschüss!', en: 'Thanks, bye!', correct: true, feedback: 'The everyday goodbye in a café.' },
+            { t: 'Danke, auf Wiedersehen!', en: 'Thank you, goodbye!', correct: true, feedback: 'Polite and correct; tschüss is more casual.' },
+            { t: 'Gute Nacht!', en: 'Good night!', correct: false, feedback: 'Gute Nacht is for bedtime. Say: Danke, tschüss!' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'directions',
+      title: 'Find your hotel',
+      emoji: '🧭',
+      scenario: 'You’re lost near the old town and stop a passer-by.',
+      afterUnit: 'u4',
+      reasons: ['travel'],
+      turns: [
+        {
+          partner: { t: 'Ja? Kann ich Ihnen helfen?', en: 'Yes? Can I help you?' },
+          goal: 'Excuse yourself and ask where the hotel is.',
+          replies: [
+            { t: 'Entschuldigung, wo ist das Hotel?', en: 'Excuse me, where is the hotel?', correct: true, feedback: 'Entschuldigung is the polite way to stop someone.' },
+            { t: 'Entschuldigung, wer ist das Hotel?', en: 'Excuse me, who is the hotel?', correct: false, feedback: 'Wer means “who”. For a place, ask wo: Wo ist das Hotel?' },
+            { t: 'Hey, Hotel!', en: 'Hey, hotel!', correct: false, feedback: 'Too abrupt with a stranger. Start with Entschuldigung and ask a full question.' },
+          ],
+        },
+        {
+          partner: { t: 'Es ist nicht weit. Gehen Sie hier nach rechts.', en: 'It’s not far. Go right here.' },
+          goal: 'Check that you go right.',
+          replies: [
+            { t: 'Nach rechts?', en: 'To the right?', correct: true, feedback: 'Checking back is a great habit when you’re getting directions.' },
+            { t: 'Nach links?', en: 'To the left?', correct: false, feedback: 'Links is left. They said rechts, right.' },
+            { t: 'Geradeaus?', en: 'Straight on?', correct: false, feedback: 'Geradeaus means straight ahead. Rechts means right.' },
+          ],
+        },
+        {
+          partner: { t: 'Ja, und dann ist das Hotel auf der linken Seite.', en: 'Yes, and then the hotel is on the left.' },
+          goal: 'Thank them warmly.',
+          replies: [
+            { t: 'Vielen Dank!', en: 'Thank you very much!', correct: true, feedback: 'Warm and natural.' },
+            { t: 'Bitte schön.', en: 'You’re welcome.', correct: false, feedback: 'Bitte schön answers a thank you. You want: Vielen Dank!' },
+            { t: 'Ich bin links.', en: 'I am on the left.', correct: false, feedback: 'That says where you are. To thank them: Vielen Dank!' },
+          ],
+        },
+        {
+          partner: { t: 'Gern geschehen. Gute Reise!', en: 'You’re welcome. Have a good trip!' },
+          goal: 'Say goodbye.',
+          replies: [
+            { t: 'Danke, tschüss!', en: 'Thanks, bye!', correct: true, feedback: 'A friendly close.' },
+            { t: 'Hallo!', en: 'Hello!', correct: false, feedback: 'Hallo is hello. To leave, say tschüss or auf Wiedersehen.' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'colleague',
+      title: 'Meet a new colleague',
+      emoji: '🤝',
+      scenario: 'It’s your first day on a new team. Jonas comes over to say hello.',
+      afterUnit: 'u1',
+      reasons: ['work', 'people', 'curious'],
+      turns: [
+        {
+          partner: { t: 'Hallo, ich bin Jonas. Wie heißt du?', en: 'Hi, I’m Jonas. What’s your name?' },
+          goal: 'Say hello and tell him your name is Alex.',
+          replies: [
+            { t: 'Hallo, ich heiße Alex.', en: 'Hi, my name is Alex.', correct: true, feedback: 'Ich heiße is the most common way to give your name.' },
+            { t: 'Hallo, ich bin Alex.', en: 'Hi, I’m Alex.', correct: true, feedback: 'Also natural, just like Jonas said it.' },
+            { t: 'Hallo, du heißt Alex.', en: 'Hi, you are called Alex.', correct: false, feedback: 'Du heißt means “you are called”. For yourself, use ich heiße.' },
+          ],
+        },
+        {
+          partner: { t: 'Freut mich! Wie geht’s?', en: 'Nice to meet you! How are you?' },
+          goal: 'Say you’re well and ask how he is.',
+          replies: [
+            { t: 'Gut, danke. Und dir?', en: 'Good, thanks. And you?', correct: true, feedback: 'Jonas used du, and Und dir? matches him.' },
+            { t: 'Gut, danke. Und Ihnen?', en: 'Good, thanks. And you? (formal)', correct: false, feedback: 'Polite, but Jonas used du. Answer with Und dir? so you don’t sound distant.' },
+            { t: 'Ich bin gut.', en: 'I am good (at it).', correct: false, feedback: 'Ich bin gut sounds like “I’m good at something”. For how you feel: Mir geht’s gut, or just Gut.' },
+          ],
+        },
+        {
+          partner: { t: 'Ist heute dein erster Tag?', en: 'Is today your first day?' },
+          goal: 'Say yes, it’s your first day.',
+          replies: [
+            { t: 'Ja, heute ist mein erster Tag.', en: 'Yes, today is my first day.', correct: true, feedback: 'Mein means my and dein means your, and you got them right.' },
+            { t: 'Ja, heute ist dein erster Tag.', en: 'Yes, today is your first day.', correct: false, feedback: 'Dein means “your”. About yourself, say mein erster Tag.' },
+            { t: 'Nein, danke.', en: 'No, thanks.', correct: false, feedback: 'That turns down an offer. Answer the question: Ja, heute ist mein erster Tag.' },
+          ],
+        },
+        {
+          partner: { t: 'Super! Bis später.', en: 'Great! See you later.' },
+          goal: 'Thank him and say see you later.',
+          replies: [
+            { t: 'Danke, bis später!', en: 'Thanks, see you later!', correct: true, feedback: 'A natural way to end a short chat.' },
+            { t: 'Bitte, bis später.', en: 'You’re welcome, see you later.', correct: false, feedback: 'Bitte answers someone else’s thanks. Here, say danke.' },
+          ],
+        },
+      ],
+    },
+  ],
+  ja: [
+    {
+      id: 'cafe',
+      title: 'Order at a café',
+      emoji: '☕',
+      scenario: 'You walk up to the counter of a café in Tokyo.',
+      afterUnit: 'u3',
+      reasons: ['travel', 'curious', 'people'],
+      turns: [
+        {
+          partner: { t: 'いらっしゃいませ。ご注文は？', en: 'Welcome. What would you like to order?', roman: 'irasshaimase. go-chūmon wa?' },
+          goal: 'Order a coffee politely.',
+          replies: [
+            { t: 'コーヒーをください。', en: 'A coffee, please.', roman: 'kōhī o kudasai.', correct: true, feedback: 'Noun + をください is the easiest polite way to order.' },
+            { t: 'コーヒーをお願いします。', en: 'A coffee, please.', roman: 'kōhī o onegaishimasu.', correct: true, feedback: 'お願いします is just as polite and very common.' },
+            { t: 'コーヒーが好きです。', en: 'I like coffee.', roman: 'kōhī ga suki desu.', correct: false, feedback: 'That says you like coffee but doesn’t order it. Say: コーヒーをください。' },
+          ],
+        },
+        {
+          partner: { t: 'ホットとアイス、どちらにしますか？', en: 'Hot or iced, which would you like?', roman: 'hotto to aisu, dochira ni shimasu ka?' },
+          goal: 'Ask for it hot.',
+          replies: [
+            { t: 'ホットでお願いします。', en: 'Hot, please.', roman: 'hotto de onegaishimasu.', correct: true, feedback: '〜でお願いします is how you pick one of the options offered.' },
+            { t: 'アイスでお願いします。', en: 'Iced, please.', roman: 'aisu de onegaishimasu.', correct: false, feedback: 'アイス is iced. Hot is ホット.' },
+            { t: 'はい、そうです。', en: 'Yes, that’s right.', roman: 'hai, sō desu.', correct: false, feedback: 'That doesn’t choose between them. Say: ホットでお願いします。' },
+          ],
+        },
+        {
+          partner: { t: '店内でお召し上がりですか？', en: 'Will you have it here?', roman: 'tennai de omeshiagari desu ka?' },
+          goal: 'Say yes, you’ll have it here.',
+          replies: [
+            { t: 'はい、店内で。', en: 'Yes, here.', roman: 'hai, tennai de.', correct: true, feedback: 'Echoing 店内 (in the shop) is the natural answer.' },
+            { t: 'いいえ、持ち帰りで。', en: 'No, to take away.', roman: 'iie, mochikaeri de.', correct: false, feedback: '持ち帰り means to take away. To stay: はい、店内で。' },
+          ],
+        },
+        {
+          partner: { t: '四百円です。', en: 'That’s 400 yen.', roman: 'yonhyaku en desu.' },
+          goal: 'Thank them.',
+          replies: [
+            { t: 'ありがとうございます。', en: 'Thank you.', roman: 'arigatō gozaimasu.', correct: true, feedback: 'Polite and warm.' },
+            { t: 'いただきます。', en: '(said before eating)', roman: 'itadakimasu.', correct: false, feedback: 'いただきます is said just before you eat. To thank the staff: ありがとうございます。' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'directions',
+      title: 'Find your hotel',
+      emoji: '🧭',
+      scenario: 'You’re lost near a station and stop a passer-by.',
+      afterUnit: 'u5',
+      reasons: ['travel'],
+      turns: [
+        {
+          partner: { t: 'はい、何でしょうか？', en: 'Yes, can I help you?', roman: 'hai, nan deshō ka?' },
+          goal: 'Excuse yourself and ask where the hotel is.',
+          replies: [
+            { t: 'すみません、ホテルはどこですか？', en: 'Excuse me, where is the hotel?', roman: 'sumimasen, hoteru wa doko desu ka?', correct: true, feedback: 'すみません is the polite way to stop someone, and どこ means “where”.' },
+            { t: 'すみません、ホテルはだれですか？', en: 'Excuse me, who is the hotel?', roman: 'sumimasen, hoteru wa dare desu ka?', correct: false, feedback: 'だれ means “who”. For a place, ask どこ.' },
+            { t: 'ホテル！', en: 'Hotel!', roman: 'hoteru!', correct: false, feedback: 'Too abrupt with a stranger. Start with すみません and ask a full question.' },
+          ],
+        },
+        {
+          partner: { t: 'まっすぐ行って、右です。', en: 'Go straight, and it’s on the right.', roman: 'massugu itte, migi desu.' },
+          goal: 'Check that it’s on the right.',
+          replies: [
+            { t: '右ですか？', en: 'On the right?', roman: 'migi desu ka?', correct: true, feedback: 'Checking back is a great habit when you’re getting directions.' },
+            { t: '左ですか？', en: 'On the left?', roman: 'hidari desu ka?', correct: false, feedback: '左 is left. They said 右, right.' },
+          ],
+        },
+        {
+          partner: { t: 'はい、駅の前です。', en: 'Yes, in front of the station.', roman: 'hai, eki no mae desu.' },
+          goal: 'Thank them warmly.',
+          replies: [
+            { t: 'どうもありがとうございます。', en: 'Thank you very much.', roman: 'dōmo arigatō gozaimasu.', correct: true, feedback: 'どうも makes the thanks extra warm.' },
+            { t: 'どういたしまして。', en: 'You’re welcome.', roman: 'dō itashimashite.', correct: false, feedback: 'That’s the reply to thanks. Here you thank: ありがとうございます。' },
+            { t: 'ごめんなさい。', en: 'I’m sorry.', roman: 'gomen nasai.', correct: false, feedback: 'That’s an apology. To thank: ありがとうございます。' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'colleague',
+      title: 'Meet a new colleague',
+      emoji: '🤝',
+      scenario: 'It’s your first day at a Tokyo office. Sato-san comes over to say hello.',
+      afterUnit: 'u2',
+      reasons: ['work', 'people', 'curious'],
+      turns: [
+        {
+          partner: { t: 'はじめまして、佐藤です。', en: 'Nice to meet you, I’m Sato.', roman: 'hajimemashite, Satō desu.' },
+          goal: 'Introduce yourself as Alex.',
+          replies: [
+            { t: 'はじめまして、アレックスです。よろしくお願いします。', en: 'Nice to meet you, I’m Alex. Pleased to work with you.', roman: 'hajimemashite, Arekkusu desu. yoroshiku onegaishimasu.', correct: true, feedback: 'よろしくお願いします closes almost every first introduction.' },
+            { t: 'はじめまして、佐藤さんです。', en: 'Nice to meet you, (I’m) Sato-san.', roman: 'hajimemashite, Satō-san desu.', correct: false, feedback: 'That says you are Sato! Give your own name: アレックスです。' },
+            { t: 'さようなら。', en: 'Goodbye.', roman: 'sayōnara.', correct: false, feedback: 'That’s goodbye. Start with はじめまして and your name.' },
+          ],
+        },
+        {
+          partner: { t: 'どちらから来ましたか？', en: 'Where are you from?', roman: 'dochira kara kimashita ka?' },
+          goal: 'Say you’re from Canada.',
+          replies: [
+            { t: 'カナダから来ました。', en: 'I’m from Canada.', roman: 'Kanada kara kimashita.', correct: true, feedback: 'から means “from”.' },
+            { t: 'カナダに来ました。', en: 'I came to Canada.', roman: 'Kanada ni kimashita.', correct: false, feedback: 'に means “to”. For “from”, use から: カナダから来ました。' },
+          ],
+        },
+        {
+          partner: { t: 'これからよろしくお願いします。', en: 'I look forward to working with you.', roman: 'korekara yoroshiku onegaishimasu.' },
+          goal: 'Return the greeting.',
+          replies: [
+            { t: 'こちらこそ、よろしくお願いします。', en: 'Likewise, I look forward to working with you.', roman: 'kochira koso, yoroshiku onegaishimasu.', correct: true, feedback: 'こちらこそ means “likewise”, the perfect reply.' },
+            { t: 'いいえ、けっこうです。', en: 'No, thank you.', roman: 'iie, kekkō desu.', correct: false, feedback: 'That politely refuses something! Reply with こちらこそ、よろしくお願いします。' },
           ],
         },
       ],

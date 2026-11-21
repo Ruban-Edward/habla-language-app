@@ -31,6 +31,8 @@ export function Choice({ exercise, course, disabled, sound, onAnswer }: Exercise
   const withArt = exercise.options.some((o) => o.emoji);
   const optionLang = langOf(course, exercise.optionSide);
   const glyphs = exercise.optionSide === 't' && !withArt && exercise.options.every((o) => o.label.length <= 2);
+  // Phrase-length answers, and odd sets like a story's three answers, read better as a list than a grid.
+  const long = !withArt && !glyphs && (exercise.options.length % 2 === 1 || exercise.options.some((o) => o.label.length > 16));
   return (
     <div className="choice">
       {exercise.audio && <AudioPrompt text={exercise.audio} lang={course.lang} />}
@@ -39,7 +41,7 @@ export function Choice({ exercise, course, disabled, sound, onAnswer }: Exercise
           {exercise.prompt}
         </div>
       )}
-      <div className={`choice-grid ${withArt ? 'with-art' : ''} ${glyphs ? 'glyphs' : ''}`}>
+      <div className={`choice-grid ${withArt ? 'with-art' : ''} ${glyphs ? 'glyphs' : ''} ${long ? 'long-options' : ''}`}>
         {exercise.options.map((o, i) => (
           <button
             key={o.label}

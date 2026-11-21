@@ -16,8 +16,8 @@ import { checkExercise } from './check';
 import { generateLesson, generatePractice, generateReview } from './generate';
 
 describe('courses', () => {
-  it('offers Spanish, French and Hindi', () => {
-    expect(COURSES.map((c) => c.id)).toEqual(['es', 'fr', 'hi']);
+  it('offers Spanish, French, Hindi, German and Japanese', () => {
+    expect(COURSES.map((c) => c.id)).toEqual(['es', 'fr', 'hi', 'de', 'ja']);
   });
 
   it('has unique, course-prefixed lesson ids', () => {
@@ -62,9 +62,46 @@ describe('courses', () => {
         }
       });
 
+      it('keeps listening exercises when speaking is on, and adds a spoken sentence', () => {
+        const lesson = lessonsOf(course).find((l) => l.kind !== 'script' && l.words.length >= 6 && l.sentences.length)!;
+        const both = generateLesson(course, lesson, { speech: true, recognition: true });
+        expect(both.some((e) => e.kind === 'choice' && e.audio)).toBe(true);
+        expect(both.some((e) => e.kind === 'speak' && e.instruction === 'Say this word')).toBe(true);
+        expect(both.some((e) => e.kind === 'speak' && e.instruction === 'Say this sentence')).toBe(true);
+      });
+
+      it('has well-formed mini-stories', () => {
+        const stories = course.stories ?? [];
+        expect(stories.length).toBeGreaterThanOrEqual(2);
+        expect(new Set(stories.map((s) => s.id)).size).toBe(stories.length);
+        for (const story of stories) {
+          expect(course.units.some((u) => u.id === story.afterUnit), `${story.id} afterUnit`).toBe(true);
+          expect(story.lines, story.id).toHaveLength(5);
+          for (const line of story.lines) {
+            expect(line.en.trim(), line.t).not.toBe('');
+            if (course.glossary) expect(line.roman, line.t).toBeTruthy();
+          }
+          expect(story.questions.length, story.id).toBeGreaterThanOrEqual(3);
+          for (const q of story.questions) {
+            expect(new Set(q.options).size, q.question).toBe(q.options.length);
+            expect(q.options, q.question).toContain(q.answer);
+          }
+        }
+      });
+
+      it('has culture notes', () => {
+        const notes = course.culture ?? [];
+        expect(notes.length).toBeGreaterThanOrEqual(5);
+        expect(new Set(notes.map((n) => n.id)).size).toBe(notes.length);
+        for (const note of notes) {
+          expect(note.body.trim(), note.id).not.toBe('');
+          if (course.glossary && note.phrase) expect(note.phrase.roman, note.id).toBeTruthy();
+        }
+      });
+
       it('has well-formed real-life missions', () => {
         const missions = course.missions ?? [];
-        expect(missions.length).toBeGreaterThanOrEqual(3);
+        expect(missions.length).toBeGreaterThanOrEqual(9);
         expect(new Set(missions.map((m) => m.id)).size).toBe(missions.length);
         for (const mission of missions) {
           expect(mission.id.startsWith(`${course.id}-`)).toBe(true);
@@ -110,13 +147,13 @@ describe('courses', () => {
         expect(checkExercise(review[0], word.t).correct).toBe(true);
       });
 
-      for (const speech of [true, false]) {
-        it(`every generated exercise is solvable (speech=${speech})`, () => {
+      for (const [speech, recognition] of [[true, true], [true, false], [false, true], [false, false]]) {
+        it(`every generated exercise is solvable (speech=${speech}, recognition=${recognition})`, () => {
           for (let round = 0; round < 5; round++) {
             for (const lesson of lessonsOf(course)) {
               const exercises = [
-                ...generateLesson(course, lesson, { speech }),
-                ...generatePractice(course, [lesson], { speech }),
+                ...generateLesson(course, lesson, { speech, recognition }),
+                ...generatePractice(course, [lesson], { speech, recognition }),
               ];
               expect(new Set(exercises.map((e) => e.key)).size).toBe(exercises.length);
               for (const ex of exercises) {
@@ -143,7 +180,12 @@ describe('courses', () => {
                   if (!course.typeInTarget) expect(ex.answerSide).toBe('en');
                 }
                 if (ex.kind === 'match') expect(ex.pairs.length).toBeGreaterThanOrEqual(4);
+                if (ex.kind === 'speak') {
+                  expect(lesson.kind, `${lesson.id}: letters are never spoken alone`).not.toBe('script');
+                  for (const said of ex.accepted) expect(checkExercise(ex, said).correct, said).toBe(true);
+                }
                 if (!speech) expect('audio' in ex && ex.audio).toBeFalsy();
+                if (!recognition) expect(ex.kind).not.toBe('speak');
               }
             }
           }
@@ -170,8 +212,8 @@ describe('missions', () => {
   });
 });
 
-describe('Hindi', () => {
-  const hindi = getCourse('hi');
+for (const id of ['hi', 'ja']) describe(`${getCourse(id).name} script and romanization`, () => {
+  const hindi = getCourse(id);
   const glossary = hindi.glossary!;
 
   it('starts with the script unit', () => {
@@ -207,6 +249,10 @@ describe('Hindi', () => {
       }
     }
   });
+});
+
+describe('Hindi', () => {
+  const hindi = getCourse('hi');
 
   it('handles the danda and accepts either gendered verb form', () => {
     const s = lessonsOf(hindi)

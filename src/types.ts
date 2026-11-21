@@ -60,6 +60,27 @@ export type Mission = {
   turns: MissionTurn[];
 };
 
+/** A short note on customs, with an optional phrase to try. */
+export type CultureNote = {
+  id: string;
+  title: string;
+  emoji: string;
+  body: string;
+  phrase?: { t: string; en: string; roman?: string };
+};
+
+/** A five-sentence story followed by comprehension questions (answered in English). */
+export type Story = {
+  id: string;
+  title: string;
+  emoji: string;
+  summary: string;
+  /** Unit whose vocabulary the story draws on. */
+  afterUnit: string;
+  lines: MissionLine[];
+  questions: { question: string; options: string[]; answer: string }[];
+};
+
 export type Course = {
   id: string;
   name: string;
@@ -80,7 +101,12 @@ export type Course = {
   glossary?: Record<string, string>;
   units: Unit[];
   missions?: Mission[];
+  stories?: Story[];
+  culture?: CultureNote[];
 };
+
+/** Display text size, a per-device setting. */
+export type TextSize = 'normal' | 'large' | 'larger';
 
 export type Side = 't' | 'en';
 export type ChoiceOption = { label: string; emoji?: string; roman?: string; speak?: string };
@@ -135,7 +161,21 @@ export type MatchExercise = {
   reviewIds?: string[];
 };
 
-export type Exercise = ChoiceExercise | TilesExercise | TypeExercise | MatchExercise;
+/** Listen, repeat, check: the learner says the prompt aloud and speech recognition checks it. */
+export type SpeakExercise = {
+  kind: 'speak';
+  key: string;
+  instruction: string;
+  /** Target-language text to say. */
+  prompt: string;
+  promptRoman?: string;
+  /** English meaning, shown under the prompt. */
+  meaning?: string;
+  accepted: string[];
+  reviewIds?: string[];
+};
+
+export type Exercise = ChoiceExercise | TilesExercise | TypeExercise | MatchExercise | SpeakExercise;
 
 export type CheckResult = { correct: boolean; answer: string; answerRoman?: string; note?: string };
 
@@ -143,6 +183,7 @@ export type SessionResult = {
   practice: boolean;
   lessonId?: string;
   missionId?: string;
+  storyId?: string;
   mistakes: number;
   accuracy: number;
   durationMs: number;
